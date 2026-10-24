@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "aurora",
+  "version": "${version}",
+  "name": "Aurora",
+  "description": "A smooth, animated client utility menu with a HUD and radar for single-player worlds.",
+  "authors": [
+    "You"
+  ],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "dev.aurora.AuroraClient"
+    ]
+  },
+  "mixins": [
+    "aurora.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.18.1",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
