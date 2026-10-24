@@ -3,6 +3,7 @@ package dev.aurora.hud;
 import dev.aurora.AuroraClient;
 import dev.aurora.module.impl.HudModule;
 import dev.aurora.module.impl.RadarModule;
+import dev.aurora.module.impl.TargetHud;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
@@ -10,8 +11,8 @@ import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.util.hit.EntityHitResult;
 
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -24,6 +25,9 @@ public final class HudRenderer {
     }
 
     private static final int ACCENT = 0xFF4C8DFF;
+    private static final int PILL_BG = 0xC0151A2B;
+    private static final int PILL_BORDER = 0xFF2A3150;
+    private static final int PILL_TEXT = 0xFFDDE3F5;
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     private static int tickCount;
@@ -66,6 +70,8 @@ public final class HudRenderer {
             return;
         }
 
+        EspRenderer.render(ctx, mc);
+
         int y = 4;
         HudModule hud = AuroraClient.modules.get(HudModule.class);
         if (hud.isEnabled()) {
@@ -76,6 +82,13 @@ public final class HudRenderer {
         if (radar.isEnabled()) {
             drawRadar(ctx, mc, radar, 6, y + 2);
         }
+
+        TargetHud target = AuroraClient.modules.get(TargetHud.class);
+        if (target.isEnabled()) {
+            drawTarget(ctx, mc);
+        }
+
+        Alerts.render(ctx, mc);
     }
 
     // ---------------------------------------------------------------- info pills
@@ -84,6 +97,7 @@ public final class HudRenderer {
         TextRenderer tr = mc.textRenderer;
 
         List<String> top = new ArrayList<>();
+        top.add("AURORA+");
         if (hud.showFps()) {
             top.add(mc.getCurrentFps() + " FPS");
         }
@@ -93,6 +107,12 @@ public final class HudRenderer {
         y = drawRow(ctx, tr, y, top);
 
         List<String> bottom = new ArrayList<>();
+        if (hud.showCoords()) {
+            bottom.add(String.format(Locale.ROOT, "%d %d %d",
+                    (int) Math.floor(mc.player.getX()),
+                    (int) Math.floor(mc.player.getY()),
+                    (int) Math.floor(mc.player.getZ())));
+        }
         if (hud.showPing()) {
             bottom.add(ping(mc) + " PING");
         }
@@ -119,13 +139,41 @@ public final class HudRenderer {
         }
         int x = 4;
         for (String s : items) {
-            int w = tr.getWidth(s) + 9;
-            ctx.fill(x, y, x + w, y + 12, 0xB0101216);
-            ctx.fill(x, y, x + 1, y + 12, ACCENT);
-            ctx.drawText(tr, s, x + 5, y + 2, 0xFFE8EAEE, false);
+            int w = tr.getWidth(s) + 10;
+            ctx.fill(x, y, x + w, y + 13, PILL_BORDER);
+            ctx.fill(x + 1, y + 1, x + w - 1, y + 12, PILL_BG);
+            ctx.drawText(tr, s, x + 5, y + 3, s.equals("AURORA+") ? ACCENT : PILL_TEXT, false);
             x += w + 3;
         }
-        return y + 15;
+        return y + 16;
+    }
+
+    // ---------------------------------------------------------------- target hud
+
+    private static void drawTarget(DrawContext ctx, MinecraftClient mc) {
+        if (!(mc.crosshairTarget instanceof EntityHitResult hit) || !(hit.getEntity() instanceof LivingEntity le)) {
+            return;
+        }
+        TextRenderer tr = mc.textRenderer;
+        String name = le.getName().getString().toUpperCase(Locale.ROOT);
+        float hp = le.getHealth();
+        float max = Math.max(1f, le.getMaxHealth());
+        String hpText = String.format(Locale.ROOT, "%.1f / %.1f HP", hp, max);
+
+        int w = Math.max(110, Math.max(tr.getWidth(name), tr.getWidth(hpText)) + 12);
+        int x = mc.getWindow().getScaledWidth() / 2 + 18;
+        int y = mc.getWindow().getScaledHeight() / 2 + 14;
+
+        ctx.fill(x, y, x + w, y + 30, PILL_BORDER);
+        ctx.fill(x + 1, y + 1, x + w - 1, y + 29, PILL_BG);
+        ctx.drawText(tr, name, x + 5, y + 4, PILL_TEXT, false);
+        ctx.drawText(tr, hpText, x + 5, y + 14, 0xFF8C919B, false);
+
+        int barW = w - 10;
+        double frac = Math.max(0, Math.min(1, hp / max));
+        int color = frac > 0.5 ? 0xFF5CE07B : (frac > 0.25 ? 0xFFFFC83D : 0xFFFF4A4A);
+        ctx.fill(x + 5, y + 24, x + 5 + barW, y + 27, 0xFF2A2F3F);
+        ctx.fill(x + 5, y + 24, x + 5 + (int) Math.round(barW * frac), y + 27, color);
     }
 
     // ---------------------------------------------------------------- radar
@@ -141,9 +189,9 @@ public final class HudRenderer {
             int half = (int) Math.round(Math.sqrt((double) r * r - (double) dy * dy));
             int next = (int) Math.round(Math.sqrt(Math.max(0.0, (double) r * r - (double) (dy + 1) * (dy + 1))));
             int edge = Math.min(half * 2, Math.max(1, Math.abs(half - next)));
-            ctx.fill(cx - half, cy + dy, cx + half, cy + dy + 1, 0x9A5C5B7E);
-            ctx.fill(cx - half, cy + dy, cx - half + edge, cy + dy + 1, 0xFFB9B4E8);
-            ctx.fill(cx + half - edge, cy + dy, cx + half, cy + dy + 1, 0xFFB9B4E8);
+            ctx.fill(cx - half, cy + dy, cx + half, cy + dy + 1, 0x886C69D6);
+            ctx.fill(cx - half, cy + dy, cx - half + edge, cy + dy + 1, 0xFFA9A6F0);
+            ctx.fill(cx + half - edge, cy + dy, cx + half, cy + dy + 1, 0xFFA9A6F0);
         }
         int inner = r / 2;
         for (int dy = -inner; dy < inner; dy++) {
@@ -171,8 +219,23 @@ public final class HudRenderer {
             if (e == mc.player || !(e instanceof LivingEntity)) {
                 continue;
             }
+            if (!e.isAlive() || e instanceof net.minecraft.entity.decoration.ArmorStandEntity) {
+                continue;
+            }
             boolean isPlayer = e instanceof PlayerEntity;
-            if (!isPlayer && !radar.showMobs()) {
+            boolean isHostile = e instanceof net.minecraft.entity.mob.Monster;
+            if (isPlayer) {
+                if (!radar.showPlayers() || ((PlayerEntity) e).isSpectator()) {
+                    continue;
+                }
+            } else if (isHostile) {
+                if (!radar.showHostile()) {
+                    continue;
+                }
+            } else if (!radar.showPassive()) {
+                continue;
+            }
+            if (Math.abs(e.getY() - mc.player.getY()) > radar.height()) {
                 continue;
             }
             double dx = e.getX() - px;
@@ -184,7 +247,7 @@ public final class HudRenderer {
             double right = -dx * cos - dz * sin;
             int sx = cx + (int) Math.round(right * scale);
             int sy = cy - (int) Math.round(forward * scale);
-            int color = isPlayer ? 0xFFFF5555 : (e instanceof HostileEntity ? 0xFFFFAA33 : 0xFF7BE07B);
+            int color = isPlayer ? 0xFFFF5555 : (isHostile ? 0xFFFFAA33 : 0xFF7BE07B);
             ctx.fill(sx - 1, sy - 1, sx + 2, sy + 2, color);
         }
 

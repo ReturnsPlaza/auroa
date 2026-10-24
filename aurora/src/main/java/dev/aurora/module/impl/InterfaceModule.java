@@ -10,7 +10,7 @@ public class InterfaceModule extends Module {
     private final BooleanSetting dim = add(new BooleanSetting("Dim background", true));
 
     public InterfaceModule() {
-        super("Interface", "Menu animation speed and background", Category.CLIENT);
+        super("Aurora+", "Menu animation speed and background", Category.CLIENT);
         togglable = false;
         loadEnabled(true);
     }

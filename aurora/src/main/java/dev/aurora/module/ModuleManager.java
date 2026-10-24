@@ -3,6 +3,11 @@ package dev.aurora.module;
 import dev.aurora.module.impl.AutoEat;
 import dev.aurora.module.impl.AutoTool;
 import dev.aurora.module.impl.EntityEsp;
+import dev.aurora.module.impl.BlockEsp;
+import dev.aurora.module.impl.Freecam;
+import dev.aurora.module.impl.GamemodeAlert;
+import dev.aurora.module.impl.StorageEsp;
+import dev.aurora.module.impl.TargetHud;
 import dev.aurora.module.impl.FastPlace;
 import dev.aurora.module.impl.Fullbright;
 import dev.aurora.module.impl.HudModule;
@@ -22,9 +27,14 @@ public class ModuleManager {
         register(new FastPlace());
         register(new AutoTool());
         register(new AutoEat());
+        register(new GamemodeAlert());
+        register(new Freecam());
         // Render
         register(new Fullbright());
         register(new EntityEsp());
+        register(new StorageEsp());
+        register(new BlockEsp());
+        register(new TargetHud());
         register(new HudModule());
         register(new RadarModule());
         // Client

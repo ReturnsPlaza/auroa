@@ -8,7 +8,10 @@ import dev.aurora.setting.NumberSetting;
 public class RadarModule extends Module {
     private final NumberSetting radius = add(new NumberSetting("Size", 36, 20, 60, 2));
     private final NumberSetting range = add(new NumberSetting("Range", 40, 16, 128, 4));
-    private final BooleanSetting mobs = add(new BooleanSetting("Mobs", true));
+    private final NumberSetting height = add(new NumberSetting("Height limit", 24, 4, 128, 4));
+    private final BooleanSetting players = add(new BooleanSetting("Players", true));
+    private final BooleanSetting hostile = add(new BooleanSetting("Hostile", false));
+    private final BooleanSetting passive = add(new BooleanSetting("Passive", false));
 
     public RadarModule() {
         super("Radar", "A round radar showing nearby players and mobs", Category.RENDER);
@@ -23,7 +26,19 @@ public class RadarModule extends Module {
         return range.asDouble();
     }
 
-    public boolean showMobs() {
-        return mobs.on();
+    public double height() {
+        return height.asDouble();
+    }
+
+    public boolean showPlayers() {
+        return players.on();
+    }
+
+    public boolean showHostile() {
+        return hostile.on();
+    }
+
+    public boolean showPassive() {
+        return passive.on();
     }
 }

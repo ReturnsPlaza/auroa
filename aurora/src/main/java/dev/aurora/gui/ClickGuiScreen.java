@@ -54,6 +54,7 @@ public class ClickGuiScreen extends Screen {
     private static final int TEXT = 0xFFE8EAEE;
     private static final int DIM = 0xFF8C919B;
     private static final int TRACK_OFF = 0xFF3A3E47;
+    private static final int ENABLED = 0xFF8FC4FF;
 
     private interface Drag {
         void start(double mx, double my);
@@ -364,7 +365,7 @@ public class ClickGuiScreen extends Screen {
             ctx.fill(x, ry, x + W, ry + ROW, Colors.alpha(ROW_HOVER, h * o));
             ctx.fill(x, ry + 1, x + 2, ry + ROW - 1, Colors.alpha(MARK, on * o));
             text(ctx, m.name, x + 6 + (int) Math.round(on * 2), ry + 3,
-                    Colors.alpha(Colors.lerp(DIM, TEXT, Math.max(on, h * 0.6)), o));
+                    Colors.alpha(Colors.lerp(DIM, Colors.lerp(TEXT, ENABLED, on), Math.max(on, h * 0.6)), o));
 
             if (m.togglable) {
                 drawSwitch(ctx, x + W - 24, ry + 3, on, o);
@@ -484,7 +485,7 @@ public class ClickGuiScreen extends Screen {
     }
 
     private static int textWidth(String s) {
-        return MinecraftClient.getInstance().textRenderer.getWidth(s);
+        return MinecraftClient.getInstance().textRenderer.getWidth(s.toUpperCase(Locale.ROOT));
     }
 
     private static void text(DrawContext ctx, String s, int x, int y, int color) {
@@ -492,6 +493,6 @@ public class ClickGuiScreen extends Screen {
         if ((color >>> 24) < 8) {
             return;
         }
-        ctx.drawText(MinecraftClient.getInstance().textRenderer, s, x, y, color, false);
+        ctx.drawText(MinecraftClient.getInstance().textRenderer, s.toUpperCase(Locale.ROOT), x, y, color, false);
     }
 }

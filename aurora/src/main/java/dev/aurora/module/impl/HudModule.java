@@ -7,12 +7,13 @@ import dev.aurora.setting.BooleanSetting;
 public class HudModule extends Module {
     private final BooleanSetting fps = add(new BooleanSetting("FPS", true));
     private final BooleanSetting clock = add(new BooleanSetting("Clock", true));
+    private final BooleanSetting coords = add(new BooleanSetting("Coordinates", true));
     private final BooleanSetting ping = add(new BooleanSetting("Ping", true));
     private final BooleanSetting ticks = add(new BooleanSetting("Ticks", true));
     private final BooleanSetting bps = add(new BooleanSetting("Speed", true));
 
     public HudModule() {
-        super("HUD", "Shows FPS, clock, ping, ticks and speed on screen", Category.RENDER);
+        super("HUD", "Shows FPS, clock, coordinates, ping, ticks and speed", Category.RENDER);
         loadEnabled(true);
     }
 
@@ -22,6 +23,10 @@ public class HudModule extends Module {
 
     public boolean showClock() {
         return clock.on();
+    }
+
+    public boolean showCoords() {
+        return coords.on();
     }
 
     public boolean showPing() {
