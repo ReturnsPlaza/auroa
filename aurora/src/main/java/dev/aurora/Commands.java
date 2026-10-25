@@ -100,6 +100,19 @@ public final class Commands {
                                             : "Configs: " + String.join(", ", names));
                                     return 1;
                                 })))
+                .then(literal("where")
+                        .executes(c -> {
+                            var p = net.minecraft.client.MinecraftClient.getInstance().player;
+                            if (p == null) {
+                                say(c.getSource(), "Not in a world");
+                                return 1;
+                            }
+                            var cp = p.getChunkPos();
+                            say(c.getSource(), "I'm in chunk " + cp.x + ", " + cp.z + " (" + Math.floorMod((int) Math.floor(p.getX()), 16) + ", " + Math.floorMod((int) Math.floor(p.getZ()), 16) + " inside it) (block "
+                                    + (int) Math.floor(p.getX()) + " " + (int) Math.floor(p.getY()) + " "
+                                    + (int) Math.floor(p.getZ()) + ")");
+                            return 1;
+                        }))
                 .then(literal("friend")
                         .then(literal("add")
                                 .then(argument("name", StringArgumentType.word())

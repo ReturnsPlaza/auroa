@@ -16,8 +16,18 @@ public class EntityEsp extends Module {
     private final BooleanSetting players = add(new BooleanSetting("Players", true));
     private final BooleanSetting hostile = add(new BooleanSetting("Hostile", true));
     private final BooleanSetting passive = add(new BooleanSetting("Passive", false));
+    private final BooleanSetting tracerLines = add(new BooleanSetting("Tracers", true));
 
     private final List<Entity> glowing = new ArrayList<>();
+
+    public boolean tracers() {
+        return tracerLines.on();
+    }
+
+    /** Entities currently outlined, used by HudRenderer to draw tracers. */
+    public List<Entity> glowing() {
+        return glowing;
+    }
 
     public EntityEsp() {
         super("Entity ESP", "Outlines entities so you can see them through walls", Category.RENDER);

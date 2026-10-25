@@ -427,8 +427,10 @@ public class ClickGuiScreen extends Screen {
         int visible = (int) Math.round(content * c);
 
         // Body and header.
-        Shapes.roundFill(ctx, x, y, W, HEADER + visible, 6, Colors.alpha(PANEL_BG, o));
-        Shapes.roundFill(ctx, x, y, W, HEADER, 6, Colors.alpha(HEADER_BG, o));
+        // Soft accent glow behind the panel, then the rounded body and header.
+        Shapes.roundFill(ctx, x - 3, y - 3, W + 6, HEADER + visible + 6, 13, Colors.alpha(accent, 0.16 * o));
+        Shapes.roundFill(ctx, x, y, W, HEADER + visible, 10, Colors.alpha(PANEL_BG, o));
+        Shapes.roundFill(ctx, x, y, W, HEADER, 10, Colors.alpha(HEADER_BG, o));
         ctx.fill(x, y + HEADER - 1, x + W, y + HEADER, Colors.alpha(accent, 0.9 * o));
         text(ctx, p.category.display, x + 7, y + 5, Colors.alpha(MARK, o));
         text(ctx, p.collapsed ? "+" : "-", x + W - 11, y + 5, Colors.alpha(DIM, o));

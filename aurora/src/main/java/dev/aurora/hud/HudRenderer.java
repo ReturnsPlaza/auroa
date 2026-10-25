@@ -5,12 +5,14 @@ import dev.aurora.gui.Fonts;
 import dev.aurora.AuroraClient;
 import dev.aurora.gui.Colors;
 import dev.aurora.gui.Palette;
+import dev.aurora.gui.Anim;
 import dev.aurora.gui.Shapes;
 import dev.aurora.module.Module;
 import dev.aurora.module.impl.Atmosphere;
 import dev.aurora.module.impl.CustomHotbar;
 import dev.aurora.module.impl.CrosshairModule;
 import dev.aurora.module.impl.Friends;
+import dev.aurora.module.impl.EntityEsp;
 import dev.aurora.module.impl.HeldItem;
 import dev.aurora.module.impl.Keystrokes;
 import dev.aurora.module.impl.Nametags;
@@ -124,6 +126,11 @@ public final class HudRenderer {
             drawNametags(ctx, mc, nametags);
         }
 
+        EntityEsp entityEsp = AuroraClient.modules.get(EntityEsp.class);
+        if (entityEsp.isEnabled() && entityEsp.tracers()) {
+            drawEntityTracers(ctx, mc, entityEsp.glowing());
+        }
+
         HeldItem held = AuroraClient.modules.get(HeldItem.class);
         held.element.shown = held.isEnabled();
         if (held.isEnabled()) {
@@ -167,8 +174,8 @@ public final class HudRenderer {
     private static void pill(DrawContext ctx, TextRenderer tr, int x, int y, int w, String s,
                              int textColor, int opacity, String theme) {
         int[] colors = getThemeColors(theme);
-        Shapes.roundFill(ctx, x, y, w, 13, 4, (opacity << 24) | (colors[0] & 0xFFFFFF));
-        Shapes.roundFill(ctx, x + 1, y + 1, w - 2, 11, 3, (opacity << 24) | (colors[1] & 0xFFFFFF));
+        Shapes.roundFill(ctx, x, y, w, 13, 6, (opacity << 24) | (colors[0] & 0xFFFFFF));
+        Shapes.roundFill(ctx, x + 1, y + 1, w - 2, 11, 5, (opacity << 24) | (colors[1] & 0xFFFFFF));
         Fonts.draw(ctx, s, x + 5, y + 3, textColor, false);
     }
 
@@ -183,10 +190,14 @@ public final class HudRenderer {
     private static void drawInfo(DrawContext ctx, MinecraftClient mc, HudModule hud, int accent, String theme) {
         TextRenderer tr = mc.textRenderer;
 
-        String nameTag = mc.player.getName().getString();
+        String nameTag = "Aurora";
         List<String> top = new ArrayList<>();
         if (hud.showBrand()) {
             top.add(nameTag);
+            ChunkPos here = mc.player.getChunkPos();
+            top.add("CHUNK " + here.x + ", " + here.z + "  LOCAL "
+                    + Math.floorMod((int) Math.floor(mc.player.getX()), 16) + ", "
+                    + Math.floorMod((int) Math.floor(mc.player.getZ()), 16));
         }
         if (hud.showFps()) {
             top.add(mc.getCurrentFps() + " FPS");
@@ -313,6 +324,9 @@ public final class HudRenderer {
 
     // ---------------------------------------------------------------- hotbar
 
+    /** Eases the selected-slot highlight from one slot to the next, so switching slots glides. */
+    private static final Anim hotbarSlot = new Anim(0);
+
     private static void drawHotbar(DrawContext ctx, MinecraftClient mc, CustomHotbar hb, String theme) {
         if (mc.player == null) {
             return;
@@ -328,16 +342,27 @@ public final class HudRenderer {
         int total = 9 * 24 - 2;
         int x0 = (sw - total) / 2;
         int y0 = sh - 26 - 6;
+
+        // Dark rounded bar behind the slots.
+        Shapes.roundFill(ctx, x0 - 6, y0 - 6, total + 12, 34, 9, (alpha << 24) | 0x0A0612);
+
+        // Normal slots.
         for (int i = 0; i < 9; i++) {
             int x = x0 + i * 24;
-            if (i == selected) {
-                Shapes.roundFill(ctx, x - 2, y0 - 2, 26, 26, 13, (40 << 24) | (lightColor & 0xFFFFFF));
-                Shapes.roundFill(ctx, x, y0, 22, 22, 11, (alpha << 24) | (lightColor & 0xFFFFFF));
-                Shapes.roundFill(ctx, x + 2, y0 + 2, 18, 18, 9, (alpha << 24) | 0x2A1B47);
-            } else {
-                Shapes.roundFill(ctx, x, y0, 22, 22, 11, (130 << 24) | (rimColor & 0xFFFFFF));
-                Shapes.roundFill(ctx, x + 1, y0 + 1, 20, 20, 10, (alpha << 24) | 0x0E0A14);
-            }
+            Shapes.roundFill(ctx, x, y0, 22, 22, 6, (130 << 24) | (rimColor & 0xFFFFFF));
+            Shapes.roundFill(ctx, x + 1, y0 + 1, 20, 20, 5, (alpha << 24) | 0x0E0A14);
+        }
+
+        // Selected highlight, gliding to the selected slot.
+        double pos = hotbarSlot.update(selected, 18);
+        int hx = x0 + (int) Math.round(pos * 24);
+        Shapes.roundFill(ctx, hx - 2, y0 - 2, 26, 26, 8, (60 << 24) | (lightColor & 0xFFFFFF));
+        Shapes.roundFill(ctx, hx, y0, 22, 22, 6, (alpha << 24) | (lightColor & 0xFFFFFF));
+        Shapes.roundFill(ctx, hx + 2, y0 + 2, 18, 18, 4, (alpha << 24) | 0x2A1B47);
+
+        // Items on top of everything.
+        for (int i = 0; i < 9; i++) {
+            int x = x0 + i * 24;
             ItemStack stack = mc.player.getInventory().getStack(i);
             if (!stack.isEmpty()) {
                 ctx.drawItem(stack, x + 3, y0 + 3);
@@ -352,29 +377,42 @@ public final class HudRenderer {
         int w = mc.getWindow().getScaledWidth();
         int h = mc.getWindow().getScaledHeight();
         int rgb = color & 0xFFFFFF;
-
-        // Sky glow: fades out from the top of the screen.
-        int bands = 24;
-        int bandH = Math.max(1, (int) (h * 0.75) / bands);
+        int horizon = (int) (h * 0.58);
         int strength = atm.tint();
+
+        // Sky: dark violet at the top, brighter purple toward the horizon.
+        int bands = 36;
+        int bandH = Math.max(1, horizon / bands);
         for (int i = 0; i < bands; i++) {
-            double t = 1.0 - (double) i / bands;
-            int a = (int) (strength * t * t);
-            if (a > 0) {
-                int y = i * bandH;
-                ctx.fill(0, y, w, y + bandH, (a << 24) | rgb);
-            }
+            double t = (double) i / bands;
+            int a = Math.min(255, (int) (strength * (0.3 + 0.7 * t * t)));
+            int c = Colors.lerp(0xFF1A0836, 0xFF000000 | rgb, t) & 0xFFFFFF;
+            ctx.fill(0, i * bandH, w, i * bandH + bandH, (a << 24) | c);
         }
 
-        // Aurora band: two soft wavy lines that drift over time.
+        // Horizon glow.
+        for (int k = 0; k < 14; k++) {
+            int a = (int) (120 * (1.0 - k / 14.0));
+            int y = horizon - 8 + k;
+            ctx.fill(0, y, w, y + 1, (a << 24) | 0xC9A7FF);
+        }
+
+        // Aurora ribbons: soft glow, bright core, warm edge. They drift over time.
         if (atm.aurora()) {
-            double phase = System.currentTimeMillis() / 900.0;
-            int base = (int) (h * 0.22);
-            for (int layer = 0; layer < 2; layer++) {
-                int a = layer == 0 ? 120 : 70;
-                for (int x = 0; x < w; x += 6) {
-                    double y = base + layer * 14 + Math.sin(x / 90.0 + phase + layer) * 14;
-                    ctx.fill(x, (int) y, x + 6, (int) y + 3, (a << 24) | 0xC9A7FF);
+            double phase = System.currentTimeMillis() / 1400.0;
+            for (int r = 0; r < 4; r++) {
+                double baseY = h * (0.10 + r * 0.06);
+                double amp = h * (0.05 + 0.015 * r);
+                double freq = 1.4 + 0.35 * r;
+                for (int x = 0; x < w; x += 8) {
+                    double u = x / (double) w;
+                    double yy = baseY
+                            + Math.sin(u * freq * Math.PI * 2 + phase + r * 1.3) * amp
+                            + Math.sin(u * 5.0 + phase * 1.7 + r) * amp * 0.25;
+                    int y = (int) Math.round(yy);
+                    ctx.fill(x, y - 5, x + 8, y + 8, 0x28C9A7FF);
+                    ctx.fill(x, y - 1, x + 8, y + 2, 0xC8F2E0FF);
+                    ctx.fill(x, y + 2, x + 8, y + 3, 0x78FFC8A0);
                 }
             }
         }
@@ -390,6 +428,24 @@ public final class HudRenderer {
     }
 
     // ---------------------------------------------------------------- nametags and held item
+
+    /** Lines from the bottom middle of the screen to each outlined entity. */
+    private static void drawEntityTracers(DrawContext ctx, MinecraftClient mc, List<Entity> entities) {
+        Projector p = new Projector(mc);
+        double[] cam = new double[3];
+        double[] sc = new double[2];
+        for (Entity e : entities) {
+            if (e == mc.player || !e.isAlive()) {
+                continue;
+            }
+            p.toCamera(e.getX(), e.getY() + e.getHeight() / 2.0, e.getZ(), cam);
+            if (cam[2] <= Projector.NEAR) {
+                continue;
+            }
+            p.toScreen(cam, sc);
+            EspRenderer.line(ctx, p.width / 2.0, p.height, sc[0], sc[1], 0xFFB07CFF, 2);
+        }
+    }
 
     private static void drawNametags(DrawContext ctx, MinecraftClient mc, Nametags nt) {
         Projector p = new Projector(mc);
@@ -454,8 +510,8 @@ public final class HudRenderer {
 
     private static void drawKey(DrawContext ctx, TextRenderer tr, int x, int y, int w, String label,
                                 boolean pressed, int accent, int[] colors, int alpha) {
-        ctx.fill(x, y, x + w, y + 18, (alpha << 24) | (colors[0] & 0xFFFFFF));
-        ctx.fill(x + 1, y + 1, x + w - 1, y + 17, pressed
+        Shapes.roundFill(ctx, x, y, w, 18, 6, (alpha << 24) | (colors[0] & 0xFFFFFF));
+        Shapes.roundFill(ctx, x + 1, y + 1, w - 2, 16, 5, pressed
                 ? ((alpha << 24) | (accent & 0xFFFFFF))
                 : ((alpha << 24) | (colors[1] & 0xFFFFFF)));
         int tc = pressed ? 0xFFFFFFFF : colors[2];
@@ -511,7 +567,7 @@ public final class HudRenderer {
         ChunkPos cp = mc.player.getChunkPos();
         boolean neon = "Neon Pink".equals(theme);
         int[] colors = getThemeColors(theme);
-        int cell = 14;
+        int cell = 18;
         int gx = 6;
         int gy = mc.getWindow().getScaledHeight() - 6 - 3 * cell - 14;
         int here = neon ? 0xFFFF2E88 : 0xFF4C8DFF;
@@ -526,7 +582,15 @@ public final class HudRenderer {
                 ctx.fill(x0 + 1, y0 + 1, x0 + cell - 1, y0 + cell - 1, center ? here : 0x30FFFFFF);
             }
         }
-        String label = "CHUNK " + cp.x + ", " + cp.z;
+        // Exact spot inside your chunk: a dot in the center cell, scaled 0-15 across the chunk.
+        int lx = Math.floorMod((int) Math.floor(mc.player.getX()), 16);
+        int lz = Math.floorMod((int) Math.floor(mc.player.getZ()), 16);
+        int inner = cell - 2;
+        int dotX = gx + cell + 1 + (int) Math.round((lx / 15.0) * (inner - 3));
+        int dotY = gy + cell + 1 + (int) Math.round((lz / 15.0) * (inner - 3));
+        Shapes.roundFill(ctx, dotX - 1, dotY - 1, 5, 5, 2, 0xFFFFFFFF);
+        Shapes.roundFill(ctx, dotX, dotY, 3, 3, 1, neon ? 0xFFFF2E88 : 0xFFA06BFF);
+        String label = "CHUNK " + cp.x + ", " + cp.z + "  LOCAL " + lx + ", " + lz;
         Fonts.draw(ctx, label, gx, gy - 12, colors[2], true);
     }
 

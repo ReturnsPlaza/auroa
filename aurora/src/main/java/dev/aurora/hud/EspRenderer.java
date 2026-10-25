@@ -116,11 +116,11 @@ public final class EspRenderer {
                 if (a[2] > Projector.NEAR) {
                     p.toScreen(a, sa);
                     seg[0] = p.width / 2.0;
-                    seg[1] = p.height / 2.0;
+                    seg[1] = p.height;
                     seg[2] = sa[0];
                     seg[3] = sa[1];
                     if (clipRect(seg, p.width, p.height)) {
-                        line(ctx, seg[0], seg[1], seg[2], seg[3], 0xFF000000 | rgb, 1);
+                        line(ctx, seg[0], seg[1], seg[2], seg[3], 0xFF000000 | rgb, thick);
                     }
                 }
             }
