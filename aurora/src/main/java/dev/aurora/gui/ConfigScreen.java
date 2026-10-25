@@ -3,6 +3,7 @@ package dev.aurora.gui;
 import dev.aurora.AuroraClient;
 import dev.aurora.Config;
 import dev.aurora.Keys;
+import dev.aurora.module.Module;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -12,9 +13,10 @@ import org.lwjgl.glfw.GLFW;
 import java.util.List;
 
 /**
- * Saved configs. Left click the top row to save the current settings as a new config.
+ * Saved configs. With no module, it manages whole-client configs.
+ * With a module, it manages that module's presets only.
+ * Left click the top row to save the current settings as a new entry.
  * Left click a name to load it. Right click a name to delete it.
- * To use someone else's config, drop their .properties file into config/aurora/configs.
  */
 public class ConfigScreen extends Screen {
     private static final int W = 240;
@@ -27,6 +29,7 @@ public class ConfigScreen extends Screen {
     private static final int DIM = 0xFF8C919B;
 
     private final Screen parent;
+    private final Module target;
     private final boolean[] prev = new boolean[400];
     private List<String> names = List.of();
     private int page;
@@ -34,20 +37,29 @@ public class ConfigScreen extends Screen {
     private boolean wasRight;
     private double mouseX;
     private double mouseY;
-    private String status = "Click a config to load it";
+    private String status = "Click a name to load it";
 
     public ConfigScreen(Screen parent) {
+        this(parent, null);
+    }
+
+    public ConfigScreen(Screen parent, Module target) {
         super(Text.literal("Configs"));
         this.parent = parent;
+        this.target = target;
         refresh();
     }
 
     private void refresh() {
-        names = Config.names();
+        names = target == null ? Config.names() : Config.moduleNames(target);
         page = Math.max(0, Math.min(pages() - 1, page));
     }
 
-    /** Entry 0 is the save row, the rest are config names. */
+    private String nextName() {
+        return target == null ? Config.nextName() : Config.nextModuleName(target);
+    }
+
+    /** Entry 0 is the save row, the rest are names. */
     private int entries() {
         return names.size() + 1;
     }
@@ -69,9 +81,7 @@ public class ConfigScreen extends Screen {
         // A click still held from opening this screen should not count.
         wasLeft = mouseDown(GLFW.GLFW_MOUSE_BUTTON_LEFT);
         wasRight = mouseDown(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
-        for (int k = 256; k <= 256; k++) {
-            prev[k] = Keys.down(k);
-        }
+        prev[GLFW.GLFW_KEY_ESCAPE] = Keys.down(GLFW.GLFW_KEY_ESCAPE);
     }
 
     @Override
@@ -125,8 +135,12 @@ public class ConfigScreen extends Screen {
             }
             if (idx == 0) {
                 if (!rightButton) {
-                    String n = Config.nextName();
-                    Config.saveNamed(AuroraClient.modules, n);
+                    String n = nextName();
+                    if (target == null) {
+                        Config.saveNamed(AuroraClient.modules, n);
+                    } else {
+                        Config.saveModule(target, n);
+                    }
                     status = "Saved " + n;
                     refresh();
                 }
@@ -134,13 +148,14 @@ public class ConfigScreen extends Screen {
             }
             String name = names.get(idx - 1);
             if (rightButton) {
-                Config.delete(name);
-                status = "Deleted " + name;
+                boolean ok = target == null ? Config.delete(name) : Config.deleteModule(target, name);
+                status = ok ? "Deleted " + name : "Could not delete " + name;
                 refresh();
-            } else if (Config.loadNamed(AuroraClient.modules, name)) {
-                status = "Loaded " + name;
             } else {
-                status = "Could not load " + name;
+                boolean ok = target == null
+                        ? Config.loadNamed(AuroraClient.modules, name)
+                        : Config.loadModule(target, name);
+                status = ok ? "Loaded " + name : "Could not load " + name;
             }
             return;
         }
@@ -156,12 +171,11 @@ public class ConfigScreen extends Screen {
 
     @Override
     public void render(DrawContext ctx, int mx, int my, float delta) {
-        if (Keys.down(GLFW.GLFW_KEY_ESCAPE)) {
-            if (!prev[GLFW.GLFW_KEY_ESCAPE]) {
-                close();
-            }
+        boolean esc = Keys.down(GLFW.GLFW_KEY_ESCAPE);
+        if (esc && !prev[GLFW.GLFW_KEY_ESCAPE]) {
+            close();
         }
-        prev[GLFW.GLFW_KEY_ESCAPE] = Keys.down(GLFW.GLFW_KEY_ESCAPE);
+        prev[GLFW.GLFW_KEY_ESCAPE] = esc;
 
         updateMouse();
         boolean left = mouseDown(GLFW.GLFW_MOUSE_BUTTON_LEFT);
@@ -180,16 +194,13 @@ public class ConfigScreen extends Screen {
         int x = left();
         int y = top();
         int h = listBottom() - y + 56;
-        ctx.fill(x, y, x + W, y + h, PANEL);
-        ctx.fill(x, y, x + W, y + 1, PURPLE);
-        ctx.fill(x, y + h - 1, x + W, y + h, PURPLE);
-        ctx.fill(x, y, x + 1, y + h, PURPLE);
-        ctx.fill(x + W - 1, y, x + W, y + h, PURPLE);
+        Shapes.roundFill(ctx, x - 1, y - 1, W + 2, h + 2, 9, PURPLE);
+        Shapes.roundFill(ctx, x, y, W, h, 8, PANEL);
 
-        var tr = MinecraftClient.getInstance().textRenderer;
-        ctx.drawText(tr, "Configs", x + 8, y + 6, PINK, false);
+        String title = target == null ? "Configs" : target.name + " presets";
+        Fonts.draw(ctx, title, x + 10, y + 6, PINK, false);
         String count = names.size() + " saved";
-        ctx.drawText(tr, count, x + W - 8 - tr.getWidth(count), y + 6, DIM, false);
+        Fonts.draw(ctx, count, x + W - 10 - Fonts.width(count), y + 6, DIM, false);
 
         int start = page * ROWS;
         for (int i = 0; i < ROWS; i++) {
@@ -198,26 +209,30 @@ public class ConfigScreen extends Screen {
                 break;
             }
             int ry = listTop() + i * ROW_H;
-            boolean hov = mouseX >= x && mouseX < x + W && mouseY >= ry && mouseY < ry + ROW_H;
+            boolean hov = mouseX >= x + 4 && mouseX < x + W - 4 && mouseY >= ry && mouseY < ry + ROW_H;
             if (hov) {
-                ctx.fill(x + 1, ry, x + W - 1, ry + ROW_H, 0x28FFFFFF);
+                Shapes.roundFill(ctx, x + 4, ry, W - 8, ROW_H - 1, 4, 0x28FFFFFF);
             }
             if (idx == 0) {
-                ctx.drawText(tr, "+ Save current as " + Config.nextName(), x + 10, ry + 2, PINK, false);
+                Fonts.draw(ctx, "+ Save current as " + nextName(), x + 12, ry + 2, PINK, false);
             } else {
-                ctx.drawText(tr, names.get(idx - 1), x + 10, ry + 2, TEXT, false);
+                Fonts.draw(ctx, names.get(idx - 1), x + 12, ry + 2, TEXT, false);
             }
         }
 
         int cy = listBottom() + 4;
-        ctx.drawText(tr, "<", x + 12, cy + 3, PINK, false);
+        Fonts.draw(ctx, "<", x + 14, cy + 3, PINK, false);
         String pageText = (page + 1) + " / " + pages();
-        ctx.drawText(tr, pageText, x + (W - tr.getWidth(pageText)) / 2, cy + 3, DIM, false);
-        ctx.drawText(tr, ">", x + W - 16, cy + 3, PINK, false);
+        Fonts.draw(ctx, pageText, x + (W - Fonts.width(pageText)) / 2, cy + 3, DIM, false);
+        Fonts.draw(ctx, ">", x + W - 18, cy + 3, PINK, false);
 
-        ctx.drawText(tr, status, x + 8, cy + 20, TEXT, false);
-        ctx.drawText(tr, "Right click deletes. Esc goes back.", x + 8, cy + 32, DIM, false);
-        ctx.drawText(tr, "To share, send a .properties file from", x + 8, cy + 42, DIM, false);
-        ctx.drawText(tr, "config/aurora/configs.", x + 8, cy + 52, DIM, false);
+        Fonts.draw(ctx, status, x + 10, cy + 20, TEXT, false);
+        Fonts.draw(ctx, "Right click deletes. Esc goes back.", x + 10, cy + 32, DIM, false);
+        if (target == null) {
+            Fonts.draw(ctx, "To share, send a .properties file from", x + 10, cy + 42, DIM, false);
+            Fonts.draw(ctx, "config/aurora/configs.", x + 10, cy + 52, DIM, false);
+        } else {
+            Fonts.draw(ctx, "Presets only change " + target.name + ".", x + 10, cy + 42, DIM, false);
+        }
     }
 }

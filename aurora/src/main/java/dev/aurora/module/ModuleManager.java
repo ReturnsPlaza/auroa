@@ -6,6 +6,9 @@ import dev.aurora.module.impl.AutoLog;
 import dev.aurora.module.impl.AutoMine;
 import dev.aurora.module.impl.AutoTool;
 import dev.aurora.module.impl.Atmosphere;
+import dev.aurora.module.impl.HeldItem;
+import dev.aurora.module.impl.Nametags;
+import dev.aurora.module.impl.WeatherModule;
 import dev.aurora.module.impl.CustomHotbar;
 import dev.aurora.module.impl.BlockEsp;
 import dev.aurora.module.impl.CrosshairModule;
@@ -56,6 +59,9 @@ public class ModuleManager {
         register(new CrosshairModule());
         register(new Atmosphere());
         register(new CustomHotbar());
+        register(new Nametags());
+        register(new WeatherModule());
+        register(new HeldItem());
         // Client
         register(new InterfaceModule());
         register(new Friends());

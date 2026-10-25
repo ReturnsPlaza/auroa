@@ -7,7 +7,7 @@ import dev.aurora.setting.NumberSetting;
 
 /** Purple sky glow, an aurora band and a purple screen outline. Drawn by HudRenderer. */
 public class Atmosphere extends Module {
-    private final NumberSetting tint = add(new NumberSetting("Sky tint", 70, 0, 255, 5));
+    private final NumberSetting tint = add(new NumberSetting("Sky tint", 140, 0, 255, 5));
     private final BooleanSetting aurora = add(new BooleanSetting("Aurora band", true));
     private final BooleanSetting outline = add(new BooleanSetting("Screen outline", true));
 

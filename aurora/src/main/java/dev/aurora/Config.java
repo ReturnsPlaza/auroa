@@ -71,6 +71,97 @@ public final class Config {
         }
     }
 
+    // ---- per-module presets: one module's settings at a time
+
+    private static Path moduleDir(Module m) {
+        Path p = dir().resolve("modules").resolve(m.name.replaceAll("[^A-Za-z0-9_-]", "_"));
+        try {
+            Files.createDirectories(p);
+        } catch (IOException ignored) {
+        }
+        return p;
+    }
+
+    private static Path modulePreset(Module m, String name) {
+        return moduleDir(m).resolve(name + ".properties");
+    }
+
+    public static List<String> moduleNames(Module m) {
+        List<String> out = new ArrayList<>();
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(moduleDir(m), "*.properties")) {
+            for (Path p : stream) {
+                String f = p.getFileName().toString();
+                out.add(f.substring(0, f.length() - ".properties".length()));
+            }
+        } catch (IOException ignored) {
+        }
+        out.sort(String::compareToIgnoreCase);
+        return out;
+    }
+
+    public static String nextModuleName(Module m) {
+        for (int i = 1; ; i++) {
+            String n = "preset" + i;
+            if (!Files.exists(modulePreset(m, n))) {
+                return n;
+            }
+        }
+    }
+
+    public static void saveModule(Module m, String name) {
+        Properties props = new Properties();
+        if (m.togglable) {
+            props.setProperty("enabled", Boolean.toString(m.isEnabled()));
+        }
+        props.setProperty("key", Integer.toString(m.key));
+        for (Setting<?> s : m.settings()) {
+            props.setProperty(s.name, s.serialize());
+        }
+        try (OutputStream out = Files.newOutputStream(modulePreset(m, name))) {
+            props.store(out, "Aurora preset for " + m.name);
+        } catch (IOException ignored) {
+        }
+    }
+
+    public static boolean loadModule(Module m, String name) {
+        Path path = modulePreset(m, name);
+        if (!Files.exists(path)) {
+            return false;
+        }
+        Properties props = new Properties();
+        try (InputStream in = Files.newInputStream(path)) {
+            props.load(in);
+        } catch (IOException e) {
+            return false;
+        }
+        String enabled = props.getProperty("enabled");
+        if (enabled != null && m.togglable) {
+            m.setEnabled(Boolean.parseBoolean(enabled));
+        }
+        String key = props.getProperty("key");
+        if (key != null) {
+            try {
+                m.key = Integer.parseInt(key);
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        for (Setting<?> s : m.settings()) {
+            String v = props.getProperty(s.name);
+            if (v != null) {
+                s.deserialize(v);
+            }
+        }
+        return true;
+    }
+
+    public static boolean deleteModule(Module m, String name) {
+        try {
+            return Files.deleteIfExists(modulePreset(m, name));
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     public static boolean delete(String name) {
         try {
             return Files.deleteIfExists(named(name));

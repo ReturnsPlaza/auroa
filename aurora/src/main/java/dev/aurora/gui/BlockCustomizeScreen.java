@@ -3,9 +3,11 @@ package dev.aurora.gui;
 import dev.aurora.AuroraClient;
 import dev.aurora.Keys;
 import dev.aurora.module.impl.BlockEsp;
+import net.minecraft.block.Block;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
@@ -14,26 +16,31 @@ import org.lwjgl.glfw.GLFW;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
 /**
- * Every block in the game, searchable. Click a block to add or remove it from Block ESP's custom list.
- * Type to search (letters, numbers, underscore). Backspace deletes. Left and right arrows change page.
+ * Every block in the game with its icon and name. Click a block to add or remove it from Block ESP's list.
+ * Type to search by name (for example "acacia" or "oak_log"). Backspace deletes. Left and right arrows change page.
  * Escape goes back to the menu.
  */
 public class BlockCustomizeScreen extends Screen {
-    private static final int W = 240;
-    private static final int ROWS = 14;
-    private static final int ROW_H = 13;
+    private static final int W = 250;
+    private static final int ROWS = 12;
+    private static final int ROW_H = 18;
     private static final int PINK = 0xFFFF2E88;
     private static final int PURPLE = 0xFFA06BFF;
-    private static final int PANEL = 0xE8100A14;
+    private static final int LAVENDER = 0xFFE0B3FF;
+    private static final int PANEL = 0xEC100A14;
     private static final int TEXT = 0xFFE8EAEE;
     private static final int DIM = 0xFF8C919B;
 
+    private record Entry(Identifier id, Block block, String name, String search) {
+    }
+
     private final Screen parent;
-    private final List<Identifier> all = new ArrayList<>();
+    private final List<Entry> all = new ArrayList<>();
     private final StringBuilder query = new StringBuilder();
-    private List<Identifier> filtered = new ArrayList<>();
+    private List<Entry> filtered = new ArrayList<>();
     private final boolean[] prev = new boolean[400];
     private int page;
     private boolean wasLeft;
@@ -44,9 +51,12 @@ public class BlockCustomizeScreen extends Screen {
         super(Text.literal("Customize blocks"));
         this.parent = parent;
         for (Identifier id : Registries.BLOCK.getIds()) {
-            all.add(id);
+            Block block = Registries.BLOCK.get(id);
+            String name = block.getName().getString();
+            String search = (id.getPath() + " " + name).toLowerCase(Locale.ROOT);
+            all.add(new Entry(id, block, name, search));
         }
-        all.sort(Comparator.comparing(Identifier::toString));
+        all.sort(Comparator.comparing(Entry::name));
         refilter();
     }
 
@@ -56,7 +66,7 @@ public class BlockCustomizeScreen extends Screen {
 
     @Override
     protected void init() {
-        // Do not treat a click that is still held from opening this screen as a click on a block.
+        // A click still held from opening this screen should not count.
         wasLeft = GLFW.glfwGetMouseButton(window(), GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
         for (int k = 45; k <= 90; k++) {
             prev[k] = Keys.down(k);
@@ -98,10 +108,10 @@ public class BlockCustomizeScreen extends Screen {
 
     private void refilter() {
         String q = query.toString();
-        List<Identifier> out = new ArrayList<>();
-        for (Identifier id : all) {
-            if (q.isEmpty() || id.getPath().contains(q)) {
-                out.add(id);
+        List<Entry> out = new ArrayList<>();
+        for (Entry e : all) {
+            if (q.isEmpty() || e.search().contains(q)) {
+                out.add(e);
             }
         }
         filtered = out;
@@ -166,11 +176,11 @@ public class BlockCustomizeScreen extends Screen {
     }
 
     private int top() {
-        return 24;
+        return 20;
     }
 
     private int listTop() {
-        return top() + 34;
+        return top() + 36;
     }
 
     private int listBottom() {
@@ -182,12 +192,12 @@ public class BlockCustomizeScreen extends Screen {
         if (mx >= x && mx < x + W && my >= listTop() && my < listBottom()) {
             int idx = page * ROWS + (int) ((my - listTop()) / ROW_H);
             if (idx < filtered.size()) {
-                Identifier id = filtered.get(idx);
-                BlockEsp e = esp();
-                if (e.customBlocks().contains(id.toString())) {
-                    e.removeBlock(id);
+                Entry e = filtered.get(idx);
+                BlockEsp b = esp();
+                if (b.customBlocks().contains(e.id().toString())) {
+                    b.removeBlock(e.id());
                 } else {
-                    e.addBlock(id);
+                    b.addBlock(e.id());
                 }
             }
             return;
@@ -214,29 +224,27 @@ public class BlockCustomizeScreen extends Screen {
         }
         wasLeft = left;
 
-        ctx.fill(0, 0, width, height, 0x99000000);
+        ctx.fill(0, 0, width, height, 0x80000000);
 
         int x = left();
         int y = top();
-        int h = listBottom() - y + 36;
-        ctx.fill(x, y, x + W, y + h, PANEL);
-        ctx.fill(x, y, x + W, y + 1, PURPLE);
-        ctx.fill(x, y + h - 1, x + W, y + h, PURPLE);
-        ctx.fill(x, y, x + 1, y + h, PURPLE);
-        ctx.fill(x + W - 1, y, x + W, y + h, PURPLE);
+        int h = listBottom() - y + 40;
+        // Purple rim, then the dark rounded panel inside it.
+        Shapes.roundFill(ctx, x - 1, y - 1, W + 2, h + 2, 9, PURPLE);
+        Shapes.roundFill(ctx, x, y, W, h, 8, PANEL);
 
         var tr = MinecraftClient.getInstance().textRenderer;
-        ctx.drawText(tr, "Customize blocks", x + 8, y + 6, PINK, false);
+        Fonts.draw(ctx, "Customize blocks", x + 12, y + 8, PINK, false);
         String count = esp().customBlocks().size() + " selected";
-        ctx.drawText(tr, count, x + W - 8 - tr.getWidth(count), y + 6, DIM, false);
+        Fonts.draw(ctx, count, x + W - 12 - Fonts.width(count), y + 8, DIM, false);
 
         // Search box.
-        ctx.fill(x + 8, y + 18, x + W - 8, y + 30, 0xFF1A1D26);
+        Shapes.roundFill(ctx, x + 10, y + 21, W - 20, 13, 5, 0xFF1C1826);
         String shown = query.toString() + "_";
-        ctx.drawText(tr, query.length() == 0 ? "type to search..." : shown, x + 12, y + 20,
+        Fonts.draw(ctx, query.length() == 0 ? "type to search..." : shown, x + 15, y + 24,
                 query.length() == 0 ? DIM : TEXT, false);
 
-        // Block rows.
+        // Block rows: checkbox, icon, friendly name.
         List<String> selected = esp().customBlocks();
         int start = page * ROWS;
         for (int i = 0; i < ROWS; i++) {
@@ -244,28 +252,32 @@ public class BlockCustomizeScreen extends Screen {
             if (idx >= filtered.size()) {
                 break;
             }
-            Identifier id = filtered.get(idx);
+            Entry e = filtered.get(idx);
             int ry = listTop() + i * ROW_H;
-            boolean hov = mouseX >= x && mouseX < x + W && mouseY >= ry && mouseY < ry + ROW_H;
+            boolean hov = mouseX >= x + 4 && mouseX < x + W - 4 && mouseY >= ry && mouseY < ry + ROW_H - 1;
             if (hov) {
-                ctx.fill(x + 1, ry, x + W - 1, ry + ROW_H, 0x28FFFFFF);
+                Shapes.roundFill(ctx, x + 4, ry, W - 8, ROW_H - 1, 4, 0x28FFFFFF);
             }
-            boolean sel = selected.contains(id.toString());
-            ctx.fill(x + 10, ry + 2, x + 20, ry + 11, sel ? PINK : 0xFF3A3E47);
-            ctx.drawText(tr, id.toString(), x + 26, ry + 2, sel ? 0xFFFFB3DA : TEXT, false);
+            boolean sel = selected.contains(e.id().toString());
+            Shapes.roundFill(ctx, x + 12, ry + 4, 10, 10, 3, sel ? PINK : 0xFF3A3E47);
+            ItemStack stack = new ItemStack(e.block().asItem());
+            if (!stack.isEmpty()) {
+                ctx.drawItem(stack, x + 30, ry + 1);
+            }
+            Fonts.draw(ctx, e.name(), x + 52, ry + 5, sel ? LAVENDER : TEXT, false);
         }
 
         // Page controls.
         int cy = listBottom() + 4;
-        ctx.drawText(tr, "<", x + 12, cy + 3, PINK, false);
+        Fonts.draw(ctx, "<", x + 14, cy + 3, PINK, false);
         String pageText = (page + 1) + " / " + pages();
-        ctx.drawText(tr, pageText, x + (W - tr.getWidth(pageText)) / 2, cy + 3, DIM, false);
-        ctx.drawText(tr, ">", x + W - 16, cy + 3, PINK, false);
+        Fonts.draw(ctx, pageText, x + (W - Fonts.width(pageText)) / 2, cy + 3, DIM, false);
+        Fonts.draw(ctx, ">", x + W - 18, cy + 3, PINK, false);
 
         // Hint.
         String hint = esp().customMode()
                 ? "Esc: back to menu"
                 : "Set Block ESP Target to Custom to use this list";
-        ctx.drawText(tr, hint, x + 8, cy + 18, DIM, false);
+        Fonts.draw(ctx, hint, x + 10, cy + 18, DIM, false);
     }
 }

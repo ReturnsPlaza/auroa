@@ -1,14 +1,19 @@
 package dev.aurora.hud;
 
+import dev.aurora.gui.Fonts;
+
 import dev.aurora.AuroraClient;
 import dev.aurora.gui.Colors;
 import dev.aurora.gui.Palette;
+import dev.aurora.gui.Shapes;
 import dev.aurora.module.Module;
 import dev.aurora.module.impl.Atmosphere;
 import dev.aurora.module.impl.CustomHotbar;
 import dev.aurora.module.impl.CrosshairModule;
 import dev.aurora.module.impl.Friends;
+import dev.aurora.module.impl.HeldItem;
 import dev.aurora.module.impl.Keystrokes;
+import dev.aurora.module.impl.Nametags;
 import dev.aurora.module.impl.HudModule;
 import dev.aurora.module.impl.InterfaceModule;
 import dev.aurora.module.impl.RadarModule;
@@ -114,6 +119,17 @@ public final class HudRenderer {
             drawTarget(ctx, mc, target, hud.opacity(), accent, ui.theme());
         }
 
+        Nametags nametags = AuroraClient.modules.get(Nametags.class);
+        if (nametags.isEnabled()) {
+            drawNametags(ctx, mc, nametags);
+        }
+
+        HeldItem held = AuroraClient.modules.get(HeldItem.class);
+        held.element.shown = held.isEnabled();
+        if (held.isEnabled()) {
+            drawHeldItem(ctx, mc, held, ui.theme());
+        }
+
         Keystrokes keys = AuroraClient.modules.get(Keystrokes.class);
         keys.element.shown = keys.isEnabled();
         if (keys.isEnabled()) {
@@ -151,15 +167,15 @@ public final class HudRenderer {
     private static void pill(DrawContext ctx, TextRenderer tr, int x, int y, int w, String s,
                              int textColor, int opacity, String theme) {
         int[] colors = getThemeColors(theme);
-        ctx.fill(x, y, x + w, y + 13, (opacity << 24) | (colors[0] & 0xFFFFFF));
-        ctx.fill(x + 1, y + 1, x + w - 1, y + 12, (opacity << 24) | (colors[1] & 0xFFFFFF));
-        ctx.drawText(tr, s, x + 5, y + 3, textColor, false);
+        Shapes.roundFill(ctx, x, y, w, 13, 4, (opacity << 24) | (colors[0] & 0xFFFFFF));
+        Shapes.roundFill(ctx, x + 1, y + 1, w - 2, 11, 3, (opacity << 24) | (colors[1] & 0xFFFFFF));
+        Fonts.draw(ctx, s, x + 5, y + 3, textColor, false);
     }
 
     private static int rowWidth(TextRenderer tr, List<String> items) {
         int w = 0;
         for (String s : items) {
-            w += tr.getWidth(s) + 10 + 3;
+            w += Fonts.width(s) + 10 + 3;
         }
         return Math.max(0, w - 3);
     }
@@ -167,9 +183,10 @@ public final class HudRenderer {
     private static void drawInfo(DrawContext ctx, MinecraftClient mc, HudModule hud, int accent, String theme) {
         TextRenderer tr = mc.textRenderer;
 
+        String nameTag = mc.player.getName().getString();
         List<String> top = new ArrayList<>();
         if (hud.showBrand()) {
-            top.add("AURORA");
+            top.add(nameTag);
         }
         if (hud.showFps()) {
             top.add(mc.getCurrentFps() + " FPS");
@@ -203,15 +220,16 @@ public final class HudRenderer {
         int x = el.x(mc.getWindow().getScaledWidth());
         int y = el.y(mc.getWindow().getScaledHeight());
         int opacity = hud.opacity();
-        int textColor = getThemeColors(theme)[2];
+        int textColor = "Neon Pink".equals(theme) ? 0xFFFFB3DA : 0xFFD9B8FF;
+        int nameColor = "Neon Pink".equals(theme) ? 0xFFFF2E88 : 0xFFB07CFF;
         for (List<String> row : List.of(top, bottom)) {
             if (row.isEmpty()) {
                 continue;
             }
             int px = x;
             for (String s : row) {
-                int w = tr.getWidth(s) + 10;
-                pill(ctx, tr, px, y, w, s, s.equals("AURORA") ? accent : textColor, opacity, theme);
+                int w = Fonts.width(s) + 10;
+                pill(ctx, tr, px, y, w, s, s.equals(nameTag) ? nameColor : textColor, opacity, theme);
                 px += w + 3;
             }
             y += 16;
@@ -235,12 +253,12 @@ public final class HudRenderer {
                 names.add(m.name.toUpperCase(Locale.ROOT));
             }
         }
-        names.sort(Comparator.comparingInt((String s) -> tr.getWidth(s)).reversed());
+        names.sort(Comparator.comparingInt((String s) -> Fonts.width(s)).reversed());
 
         HudLayout.Element el = hud.listElement;
         int w = 40;
         for (String s : names) {
-            w = Math.max(w, tr.getWidth(s) + 12);
+            w = Math.max(w, Fonts.width(s) + 12);
         }
         el.w = w;
         el.h = Math.max(13, names.size() * 15 - 2);
@@ -249,12 +267,12 @@ public final class HudRenderer {
         int y = el.y(mc.getWindow().getScaledHeight());
         int opacity = hud.opacity();
         for (String s : names) {
-            int pw = tr.getWidth(s) + 12;
+            int pw = Fonts.width(s) + 12;
             int px = x + el.w - pw;
             ctx.fill(px, y, px + pw, y + 13, (opacity << 24) | (colors[0] & 0xFFFFFF));
             ctx.fill(px + 1, y + 1, px + pw - 1, y + 12, (opacity << 24) | (colors[1] & 0xFFFFFF));
             ctx.fill(px + pw - 3, y + 1, px + pw - 1, y + 12, accent);
-            ctx.drawText(tr, s, px + 5, y + 3, colors[2], false);
+            Fonts.draw(ctx, s, px + 5, y + 3, colors[2], false);
             y += 15;
         }
     }
@@ -275,7 +293,7 @@ public final class HudRenderer {
         float max = Math.max(1f, le.getMaxHealth());
         String hpText = String.format(Locale.ROOT, "%.1f / %.1f HP", hp, max);
 
-        int w = Math.max(110, Math.max(tr.getWidth(name), tr.getWidth(hpText)) + 12);
+        int w = Math.max(110, Math.max(Fonts.width(name), Fonts.width(hpText)) + 12);
         el.w = w;
         int x = el.x(mc.getWindow().getScaledWidth());
         int y = el.y(mc.getWindow().getScaledHeight());
@@ -283,8 +301,8 @@ public final class HudRenderer {
         ctx.fill(x, y, x + w, y + 30, colors[0]);
         ctx.fill(x + 1, y + 1, x + w - 1, y + 29, (opacity << 24) | (colors[1] & 0xFFFFFF));
         ctx.fill(x + 1, y + 1, x + 3, y + 29, accent);
-        ctx.drawText(tr, name, x + 7, y + 4, colors[2], false);
-        ctx.drawText(tr, hpText, x + 7, y + 14, 0xFF8C919B, false);
+        Fonts.draw(ctx, name, x + 7, y + 4, colors[2], false);
+        Fonts.draw(ctx, hpText, x + 7, y + 14, 0xFF8C919B, false);
 
         int barW = w - 14;
         double frac = Math.max(0, Math.min(1, hp / max));
@@ -302,25 +320,23 @@ public final class HudRenderer {
         int sw = mc.getWindow().getScaledWidth();
         int sh = mc.getWindow().getScaledHeight();
         boolean neon = "Neon Pink".equals(theme);
-        int[] colors = getThemeColors(theme);
-        int selectedColor = neon ? 0xFFFF8FCB : 0xFFE0B3FF; // light purple, light pink in Neon Pink
+        int lightColor = neon ? 0xFFFF8FCB : 0xFFE0B3FF; // selected slot: light purple, light pink in Neon Pink
+        int rimColor = neon ? 0xFFFF2E88 : 0xFFA06BFF;   // every slot's outline
         int alpha = hb.alpha();
         int selected = mc.player.getInventory().getSelectedSlot();
 
-        int total = 9 * 22 + 8 * 2;
+        int total = 9 * 24 - 2;
         int x0 = (sw - total) / 2;
-        int y0 = sh - 22 - 4;
+        int y0 = sh - 26 - 6;
         for (int i = 0; i < 9; i++) {
             int x = x0 + i * 24;
-            boolean sel = i == selected;
-            if (sel) {
-                // Faint purple glow, solid purple border, dark purple inside.
-                ctx.fill(x - 2, y0 - 2, x + 24, y0 + 24, 0x40000000 | (selectedColor & 0xFFFFFF));
-                ctx.fill(x, y0, x + 22, y0 + 22, 0xFF000000 | (selectedColor & 0xFFFFFF));
-                ctx.fill(x + 2, y0 + 2, x + 20, y0 + 20, (alpha << 24) | 0x2A1B47);
+            if (i == selected) {
+                Shapes.roundFill(ctx, x - 2, y0 - 2, 26, 26, 13, (40 << 24) | (lightColor & 0xFFFFFF));
+                Shapes.roundFill(ctx, x, y0, 22, 22, 11, (alpha << 24) | (lightColor & 0xFFFFFF));
+                Shapes.roundFill(ctx, x + 2, y0 + 2, 18, 18, 9, (alpha << 24) | 0x2A1B47);
             } else {
-                ctx.fill(x, y0, x + 22, y0 + 22, (alpha << 24) | (colors[0] & 0xFFFFFF));
-                ctx.fill(x + 1, y0 + 1, x + 21, y0 + 21, (alpha << 24) | (colors[1] & 0xFFFFFF));
+                Shapes.roundFill(ctx, x, y0, 22, 22, 11, (130 << 24) | (rimColor & 0xFFFFFF));
+                Shapes.roundFill(ctx, x + 1, y0 + 1, 20, 20, 10, (alpha << 24) | 0x0E0A14);
             }
             ItemStack stack = mc.player.getInventory().getStack(i);
             if (!stack.isEmpty()) {
@@ -339,7 +355,7 @@ public final class HudRenderer {
 
         // Sky glow: fades out from the top of the screen.
         int bands = 24;
-        int bandH = Math.max(1, (int) (h * 0.6) / bands);
+        int bandH = Math.max(1, (int) (h * 0.75) / bands);
         int strength = atm.tint();
         for (int i = 0; i < bands; i++) {
             double t = 1.0 - (double) i / bands;
@@ -355,7 +371,7 @@ public final class HudRenderer {
             double phase = System.currentTimeMillis() / 900.0;
             int base = (int) (h * 0.22);
             for (int layer = 0; layer < 2; layer++) {
-                int a = layer == 0 ? 70 : 40;
+                int a = layer == 0 ? 120 : 70;
                 for (int x = 0; x < w; x += 6) {
                     double y = base + layer * 14 + Math.sin(x / 90.0 + phase + layer) * 14;
                     ctx.fill(x, (int) y, x + 6, (int) y + 3, (a << 24) | 0xC9A7FF);
@@ -373,6 +389,67 @@ public final class HudRenderer {
         }
     }
 
+    // ---------------------------------------------------------------- nametags and held item
+
+    private static void drawNametags(DrawContext ctx, MinecraftClient mc, Nametags nt) {
+        Projector p = new Projector(mc);
+        double[] cam = new double[3];
+        double[] sc = new double[2];
+        for (Entity e : mc.world.getEntities()) {
+            if (e == mc.player || !(e instanceof LivingEntity) || !e.isAlive()) {
+                continue;
+            }
+            boolean isPlayer = e instanceof PlayerEntity;
+            if (isPlayer ? !nt.players() : !nt.mobs()) {
+                continue;
+            }
+            if (mc.player.distanceTo(e) > nt.range()) {
+                continue;
+            }
+            p.toCamera(e.getX(), e.getY() + e.getHeight() + 0.35, e.getZ(), cam);
+            if (cam[2] <= Projector.NEAR) {
+                continue;
+            }
+            p.toScreen(cam, sc);
+            String name = e.getName().getString();
+            int tw = Fonts.width(name);
+            int sx = (int) Math.round(sc[0]);
+            int sy = (int) Math.round(sc[1]);
+            if (sx + tw / 2 < 0 || sx - tw / 2 > p.width || sy < -12 || sy > p.height) {
+                continue;
+            }
+            Shapes.roundFill(ctx, sx - tw / 2 - 4, sy - 4, tw + 8, 12, 5, 0xB0100A14);
+            Fonts.draw(ctx, name, sx - tw / 2, sy - 2, isPlayer ? 0xFFE0B3FF : 0xFFFFFFFF, true);
+        }
+    }
+
+    private static void drawHeldItem(DrawContext ctx, MinecraftClient mc, HeldItem hi, String theme) {
+        HudLayout.Element el = hi.element;
+        int[] colors = getThemeColors(theme);
+        ItemStack stack = mc.player.getMainHandStack();
+        String label = stack.isEmpty() ? "Nothing held" : stack.getName().getString();
+        int w = Math.max(96, Fonts.width(label) + 36);
+        el.w = w;
+        el.h = 24;
+        int x = el.x(mc.getWindow().getScaledWidth());
+        int y = el.y(mc.getWindow().getScaledHeight());
+        Shapes.roundFill(ctx, x, y, w, 24, 8, (230 << 24) | (colors[0] & 0xFFFFFF));
+        Shapes.roundFill(ctx, x + 1, y + 1, w - 2, 22, 7, (230 << 24) | (colors[1] & 0xFFFFFF));
+        if (!stack.isEmpty()) {
+            ctx.drawItem(stack, x + 4, y + 4);
+        }
+        Fonts.draw(ctx, label, x + 26, y + 5, colors[2], false);
+        if (!stack.isEmpty() && stack.isDamageable()) {
+            int max = Math.max(1, stack.getMaxDamage());
+            double frac = Math.max(0, Math.min(1, (max - stack.getDamage()) / (double) max));
+            int barW = w - 30;
+            int fill = (int) Math.round(barW * frac);
+            int c = frac > 0.5 ? 0xFF5CE07B : (frac > 0.25 ? 0xFFFFC83D : 0xFFFF4A4A);
+            Shapes.roundFill(ctx, x + 26, y + 17, barW, 3, 1, 0xFF2A2F3F);
+            Shapes.roundFill(ctx, x + 26, y + 17, fill, 3, 1, c);
+        }
+    }
+
     // ---------------------------------------------------------------- keystrokes
 
     private static void drawKey(DrawContext ctx, TextRenderer tr, int x, int y, int w, String label,
@@ -382,7 +459,7 @@ public final class HudRenderer {
                 ? ((alpha << 24) | (accent & 0xFFFFFF))
                 : ((alpha << 24) | (colors[1] & 0xFFFFFF)));
         int tc = pressed ? 0xFFFFFFFF : colors[2];
-        ctx.drawText(tr, label, x + (w - tr.getWidth(label)) / 2, y + 5, tc, false);
+        Fonts.draw(ctx, label, x + (w - Fonts.width(label)) / 2, y + 5, tc, false);
     }
 
     private static void drawKeystrokes(DrawContext ctx, MinecraftClient mc, Keystrokes ks, int accent, String theme) {
@@ -404,7 +481,7 @@ public final class HudRenderer {
         drawKey(ctx, tr, x + 30, y + 40, 28, "RMB", mc.options.useKey.isPressed(), accent, colors, alpha);
         if (cps) {
             String s = ks.cps(true) + " CPS   " + ks.cps(false) + " CPS";
-            ctx.drawText(tr, s, x + (58 - tr.getWidth(s)) / 2, y + 62, colors[2], false);
+            Fonts.draw(ctx, s, x + (58 - Fonts.width(s)) / 2, y + 62, colors[2], false);
         }
     }
 
@@ -450,7 +527,7 @@ public final class HudRenderer {
             }
         }
         String label = "CHUNK " + cp.x + ", " + cp.z;
-        ctx.drawText(tr, label, gx, gy - 12, colors[2], true);
+        Fonts.draw(ctx, label, gx, gy - 12, colors[2], true);
     }
 
     // ---------------------------------------------------------------- radar
@@ -510,7 +587,7 @@ public final class HudRenderer {
                 double right = -wx * cos - wz * sin;
                 int lx = cx + (int) Math.round(right * (r - 7));
                 int ly = cy - (int) Math.round(fwd * (r - 7));
-                ctx.drawText(tr, letters[i], lx - 2, ly - 4, i == 0 ? accent : 0xFFE8EAEE, false);
+                Fonts.draw(ctx, letters[i], lx - 2, ly - 4, i == 0 ? accent : 0xFFE8EAEE, false);
             }
         }
 
@@ -568,7 +645,7 @@ public final class HudRenderer {
                     (int) Math.floor(mc.player.getX()),
                     (int) Math.floor(mc.player.getY()),
                     (int) Math.floor(mc.player.getZ()));
-            ctx.drawText(tr, s, cx - tr.getWidth(s) / 2, cy + r + 4, 0xFFFFFFFF, true);
+            Fonts.draw(ctx, s, cx - Fonts.width(s) / 2, cy + r + 4, 0xFFFFFFFF, true);
         }
     }
 }

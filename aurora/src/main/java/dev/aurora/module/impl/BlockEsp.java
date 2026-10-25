@@ -27,7 +27,7 @@ import java.util.Set;
 public class BlockEsp extends EspModule {
     private final ModeSetting target = add(new ModeSetting("Target", "Ores",
             "Ores", "Diamond", "Debris", "Spawners", "Custom"));
-    private final ModeSetting color = add(new ModeSetting("Color", "Auto",
+    private final ModeSetting color = add(new ModeSetting("Color", "Purple",
             concat("Auto", Palette.NAMES)));
     private final NumberSetting range = add(new NumberSetting("Range", 14, 6, 28, 2));
     private final ListSetting blocks = addHidden(new ListSetting("blocks"));

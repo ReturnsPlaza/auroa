@@ -1,5 +1,7 @@
 package dev.aurora.hud;
 
+import dev.aurora.gui.Fonts;
+
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
@@ -62,8 +64,8 @@ public final class Alerts {
             }
 
             float scale = 2f;
-            int nameW = (int) (tr.getWidth(a.name()) * scale);
-            int lineW = tr.getWidth(a.line());
+            int nameW = (int) (Fonts.width(a.name()) * scale);
+            int lineW = Fonts.width(a.line());
             int textW = Math.max(nameW, lineW);
             int total = 20 + textW;
             int left = cx - total / 2;
@@ -81,9 +83,9 @@ public final class Alerts {
             ctx.getMatrices().pushMatrix();
             ctx.getMatrices().translate(tx, top);
             ctx.getMatrices().scale(scale, scale);
-            ctx.drawText(tr, a.name(), 0, 0, (al << 24) | 0xFF4A4A, false);
+            Fonts.draw(ctx, a.name(), 0, 0, (al << 24) | 0xFF4A4A, false);
             ctx.getMatrices().popMatrix();
-            ctx.drawText(tr, a.line(), tx, top + 22, (al << 24) | 0xE8EAEE, false);
+            Fonts.draw(ctx, a.line(), tx, top + 22, (al << 24) | 0xE8EAEE, false);
 
             y += 44;
         }

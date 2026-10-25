@@ -7,6 +7,8 @@ import dev.aurora.hud.HudLayout;
 import dev.aurora.module.Category;
 import dev.aurora.module.Module;
 import dev.aurora.module.impl.BlockEsp;
+import dev.aurora.module.impl.HudModule;
+import dev.aurora.module.impl.RadarModule;
 import dev.aurora.module.impl.InterfaceModule;
 import dev.aurora.setting.BooleanSetting;
 import dev.aurora.setting.ModeSetting;
@@ -379,10 +381,21 @@ public class ClickGuiScreen extends Screen {
         return settingAnims.computeIfAbsent(s, k -> new Anim(initial));
     }
 
+    /** Every module gets a Presets row except the HUD and Radar, which keep their own layout settings. */
+    private static boolean hasPresets(Module m) {
+        return !(m instanceof HudModule || m instanceof RadarModule || m instanceof InterfaceModule);
+    }
+
     private static double settingsHeight(Module m) {
         double h = SET_BOOL; // the keybind row
-        if (m instanceof BlockEsp || m instanceof InterfaceModule) {
-            h += SET_BOOL; // the Customize / Configs row
+        if (m instanceof BlockEsp) {
+            h += SET_BOOL; // the Customize row
+        }
+        if (m instanceof InterfaceModule) {
+            h += SET_BOOL; // the Configs row
+        }
+        if (hasPresets(m)) {
+            h += SET_BOOL; // the Presets row
         }
         for (Setting<?> s : m.settings()) {
             if (s.hidden) {
@@ -414,8 +427,8 @@ public class ClickGuiScreen extends Screen {
         int visible = (int) Math.round(content * c);
 
         // Body and header.
-        ctx.fill(x, y, x + W, y + HEADER + visible, Colors.alpha(PANEL_BG, o));
-        ctx.fill(x, y, x + W, y + HEADER, Colors.alpha(HEADER_BG, o));
+        Shapes.roundFill(ctx, x, y, W, HEADER + visible, 6, Colors.alpha(PANEL_BG, o));
+        Shapes.roundFill(ctx, x, y, W, HEADER, 6, Colors.alpha(HEADER_BG, o));
         ctx.fill(x, y + HEADER - 1, x + W, y + HEADER, Colors.alpha(accent, 0.9 * o));
         text(ctx, p.category.display, x + 7, y + 5, Colors.alpha(MARK, o));
         text(ctx, p.collapsed ? "+" : "-", x + W - 11, y + 5, Colors.alpha(DIM, o));
@@ -565,6 +578,16 @@ public class ClickGuiScreen extends Screen {
             y += SET_BOOL;
         }
 
+        // Presets row (every module except HUD and Radar): saves or loads just this module's settings.
+        if (hasPresets(m) && !(m instanceof InterfaceModule)) {
+            text(ctx, "Presets", x + 10, y + 3, Colors.alpha(DIM, a));
+            text(ctx, "Open", x + W - 8 - textWidth("Open"), y + 3, Colors.alpha(accent, a));
+            addHit(x, y, W, SET_BOOL,
+                    () -> MinecraftClient.getInstance().setScreen(new ConfigScreen(ClickGuiScreen.get(), m)),
+                    null, null);
+            y += SET_BOOL;
+        }
+
         // Configs row (Aurora+ only): opens the saved config list.
         if (m instanceof InterfaceModule) {
             String label = "Open";
@@ -627,7 +650,7 @@ public class ClickGuiScreen extends Screen {
     }
 
     private static int textWidth(String s) {
-        return MinecraftClient.getInstance().textRenderer.getWidth(s.toUpperCase(Locale.ROOT));
+        return Fonts.width(s.toUpperCase(Locale.ROOT));
     }
 
     private static void text(DrawContext ctx, String s, int x, int y, int color) {
@@ -635,6 +658,6 @@ public class ClickGuiScreen extends Screen {
         if ((color >>> 24) < 8) {
             return;
         }
-        ctx.drawText(MinecraftClient.getInstance().textRenderer, s.toUpperCase(Locale.ROOT), x, y, color, false);
+        Fonts.draw(ctx, s.toUpperCase(Locale.ROOT), x, y, color, false);
     }
 }
