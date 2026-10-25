@@ -3,6 +3,7 @@ package dev.aurora.gui;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.text.Style;
+import net.minecraft.text.StyleSpriteSource;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 
@@ -14,7 +15,7 @@ public final class Fonts {
     private static final Identifier BOLD = Identifier.of("aurora", "bold");
 
     private static Text styled(String s) {
-        return Text.literal(s).setStyle(Style.EMPTY.withFont(BOLD));
+        return Text.literal(s).setStyle(Style.EMPTY.withFont(new StyleSpriteSource.Font(BOLD)));
     }
 
     public static void draw(DrawContext ctx, String s, int x, int y, int color, boolean shadow) {
