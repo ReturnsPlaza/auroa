@@ -1,0 +1,32 @@
+package dev.aurora.module.impl;
+
+import dev.aurora.gui.Palette;
+import dev.aurora.module.Category;
+import dev.aurora.module.Module;
+import dev.aurora.setting.BooleanSetting;
+import dev.aurora.setting.ModeSetting;
+import dev.aurora.setting.NumberSetting;
+
+public class InterfaceModule extends Module {
+    private final ModeSetting accent = add(new ModeSetting("Accent", "Blue", Palette.NAMES));
+    private final NumberSetting speed = add(new NumberSetting("Animation speed", 14, 4, 30, 1));
+    private final BooleanSetting dim = add(new BooleanSetting("Dim background", true));
+
+    public InterfaceModule() {
+        super("Aurora+", "Menu colour, animation speed and background", Category.CLIENT);
+        togglable = false;
+        loadEnabled(true);
+    }
+
+    public String accent() {
+        return accent.get();
+    }
+
+    public double speed() {
+        return speed.asDouble();
+    }
+
+    public boolean dimBackground() {
+        return dim.on();
+    }
+}
