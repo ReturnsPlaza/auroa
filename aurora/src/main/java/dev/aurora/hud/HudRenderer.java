@@ -29,7 +29,6 @@ import net.minecraft.util.math.ChunkPos;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -390,11 +389,11 @@ public final class HudRenderer {
         int y = el.y(mc.getWindow().getScaledHeight());
         int[] colors = getThemeColors(theme);
 
+        // Armor slots in the inventory: index 3 is the helmet, index 0 is the boots. Helmet first.
         List<ItemStack> armor = new ArrayList<>();
-        for (ItemStack s : mc.player.getArmorItems()) {
-            armor.add(s);
+        for (int i = 3; i >= 0; i--) {
+            armor.add(mc.player.getInventory().getArmorStack(i));
         }
-        Collections.reverse(armor); // helmet first, boots last
 
         slot(ctx, x, y, mc.player.getOffHandStack(), colors);
         slot(ctx, x + 25, y, mc.player.getMainHandStack(), colors);
