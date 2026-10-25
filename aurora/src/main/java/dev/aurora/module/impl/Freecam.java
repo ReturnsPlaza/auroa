@@ -105,6 +105,8 @@ public class Freecam extends Module {
         mc.options.jumpKey.setPressed(false);
         mc.options.sneakKey.setPressed(false);
         mc.options.sprintKey.setPressed(false);
+        // Stop the character's leftover momentum so the body stays put. Gravity still applies.
+        mc.player.setVelocity(0, mc.player.getVelocity().y, 0);
     }
 
     public double camX(float t) {
