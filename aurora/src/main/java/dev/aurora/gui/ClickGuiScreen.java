@@ -211,12 +211,13 @@ public class ClickGuiScreen extends Screen {
         }
     }
 
-    /** While waiting for a keybind: the first new key press is bound. Escape cancels, Backspace/Delete clears. */
+    /** While waiting for a keybind: the first new key press is bound. Escape, Backspace or Delete resets it to none. */
     private void pollBind() {
         for (int k : Keys.all()) {
             boolean down = Keys.down(k);
             if (down && !prevKeys[k]) {
                 if (k == GLFW.GLFW_KEY_ESCAPE) {
+                    listening.key = -1;
                     listening = null;
                 } else if (k == GLFW.GLFW_KEY_BACKSPACE || k == GLFW.GLFW_KEY_DELETE) {
                     listening.key = -1;
@@ -601,7 +602,7 @@ public class ClickGuiScreen extends Screen {
             y += SET_BOOL;
         }
 
-        // Keybind row. Click it, then press a key. Escape cancels, Backspace or Delete clears.
+        // Keybind row. Click it, then press a key. Escape, Backspace or Delete resets it to none.
         boolean waiting = listening == m;
         String bind = waiting ? "PRESS A KEY" : Keys.name(m.key);
         text(ctx, "Keybind", x + 10, y + 3, Colors.alpha(DIM, a));

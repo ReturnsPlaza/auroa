@@ -8,7 +8,6 @@ import dev.aurora.gui.Palette;
 import dev.aurora.gui.Anim;
 import dev.aurora.gui.Shapes;
 import dev.aurora.module.Module;
-import dev.aurora.module.impl.Atmosphere;
 import dev.aurora.module.impl.CustomHotbar;
 import dev.aurora.module.impl.CrosshairModule;
 import dev.aurora.module.impl.Friends;
@@ -93,10 +92,6 @@ public final class HudRenderer {
         boolean neon = "Neon Pink".equals(ui.theme());
         int accent = neon ? 0xFFFF2E88 : Palette.of(ui.accent());
 
-        Atmosphere atmosphere = AuroraClient.modules.get(Atmosphere.class);
-        if (atmosphere.isEnabled()) {
-            drawAtmosphere(ctx, mc, atmosphere, neon ? 0xFFFF2E88 : 0xFFA06BFF);
-        }
 
         HudModule hud = AuroraClient.modules.get(HudModule.class);
         hud.infoElement.shown = hud.isEnabled();
@@ -321,13 +316,28 @@ public final class HudRenderer {
         int x0 = (sw - total) / 2;
         int y0 = sh - 26 - 6;
 
+        // Aurora aura: layered soft glow around the bar that drifts between purple and teal.
+        double t = System.currentTimeMillis() / 1600.0;
+        int auraA = neon ? 0xFFFF2E88 : 0xFFA06BFF;
+        int auraB = neon ? 0xFFFFB3DA : 0xFF5CE8D0;
+        int drift = Colors.lerp(auraA, auraB, (Math.sin(t) + 1) / 2) & 0xFFFFFF;
+        for (int k = 6; k >= 1; k--) {
+            int a = 10 + (7 - k) * 7; // outer layers faint, inner layers brighter
+            int pad = k * 2;
+            Shapes.roundFill(ctx, x0 - 6 - pad, y0 - 6 - pad, total + 12 + pad * 2, 34 + pad * 2, 9 + pad,
+                    (a << 24) | drift);
+        }
+
         // Dark rounded bar behind the slots.
         Shapes.roundFill(ctx, x0 - 6, y0 - 6, total + 12, 34, 9, (alpha << 24) | 0x0A0612);
+        // Glass highlight along the top edge of the bar.
+        Shapes.roundFill(ctx, x0 - 3, y0 - 5, total + 6, 2, 1, ((alpha / 3) << 24) | 0xFFFFFF);
 
-        // Normal slots.
+        // Normal slots. Each outline shimmers on its own phase, so the light appears to travel along the bar.
         for (int i = 0; i < 9; i++) {
             int x = x0 + i * 24;
-            Shapes.roundFill(ctx, x, y0, 22, 22, 6, (130 << 24) | (rimColor & 0xFFFFFF));
+            int slotRim = Colors.lerp(rimColor, auraB, (Math.sin(t * 1.5 + i * 0.7) + 1) / 2 * 0.6) & 0xFFFFFF;
+            Shapes.roundFill(ctx, x, y0, 22, 22, 6, (150 << 24) | slotRim);
             Shapes.roundFill(ctx, x + 1, y0 + 1, 20, 20, 5, (alpha << 24) | 0x0E0A14);
         }
 
@@ -338,70 +348,21 @@ public final class HudRenderer {
         Shapes.roundFill(ctx, hx, y0, 22, 22, 6, (alpha << 24) | (lightColor & 0xFFFFFF));
         Shapes.roundFill(ctx, hx + 2, y0 + 2, 18, 18, 4, (alpha << 24) | 0x2A1B47);
 
-        // Items on top of everything.
+        // Items on top of everything, each with a small durability bar along the bottom of its slot.
         for (int i = 0; i < 9; i++) {
             int x = x0 + i * 24;
             ItemStack stack = mc.player.getInventory().getStack(i);
             if (!stack.isEmpty()) {
                 ctx.drawItem(stack, x + 3, y0 + 3);
                 ctx.drawStackOverlay(mc.textRenderer, stack, x + 3, y0 + 3);
-            }
-        }
-    }
-
-    // ---------------------------------------------------------------- atmosphere
-
-    private static void drawAtmosphere(DrawContext ctx, MinecraftClient mc, Atmosphere atm, int color) {
-        int w = mc.getWindow().getScaledWidth();
-        int h = mc.getWindow().getScaledHeight();
-        int rgb = color & 0xFFFFFF;
-        int horizon = (int) (h * 0.58);
-        int strength = atm.tint();
-
-        // Sky: dark violet at the top, brighter purple toward the horizon.
-        int bands = 36;
-        int bandH = Math.max(1, horizon / bands);
-        for (int i = 0; i < bands; i++) {
-            double t = (double) i / bands;
-            int a = Math.min(255, (int) (strength * (0.3 + 0.7 * t * t)));
-            int c = Colors.lerp(0xFF1A0836, 0xFF000000 | rgb, t) & 0xFFFFFF;
-            ctx.fill(0, i * bandH, w, i * bandH + bandH, (a << 24) | c);
-        }
-
-        // Horizon glow.
-        for (int k = 0; k < 14; k++) {
-            int a = (int) (120 * (1.0 - k / 14.0));
-            int y = horizon - 8 + k;
-            ctx.fill(0, y, w, y + 1, (a << 24) | 0xC9A7FF);
-        }
-
-        // Aurora ribbons: soft glow, bright core, warm edge. They drift over time.
-        if (atm.aurora()) {
-            double phase = System.currentTimeMillis() / 1400.0;
-            for (int r = 0; r < 4; r++) {
-                double baseY = h * (0.10 + r * 0.06);
-                double amp = h * (0.05 + 0.015 * r);
-                double freq = 1.4 + 0.35 * r;
-                for (int x = 0; x < w; x += 8) {
-                    double u = x / (double) w;
-                    double yy = baseY
-                            + Math.sin(u * freq * Math.PI * 2 + phase + r * 1.3) * amp
-                            + Math.sin(u * 5.0 + phase * 1.7 + r) * amp * 0.25;
-                    int y = (int) Math.round(yy);
-                    ctx.fill(x, y - 5, x + 8, y + 8, 0x28C9A7FF);
-                    ctx.fill(x, y - 1, x + 8, y + 2, 0xC8F2E0FF);
-                    ctx.fill(x, y + 2, x + 8, y + 3, 0x78FFC8A0);
+                if (stack.isDamageable()) {
+                    int max = Math.max(1, stack.getMaxDamage());
+                    double frac = Math.max(0, Math.min(1, (max - stack.getDamage()) / (double) max));
+                    int c = frac > 0.5 ? 0xFF5CE07B : (frac > 0.25 ? 0xFFFF9A3D : 0xFFFF4A4A);
+                    Shapes.roundFill(ctx, x + 3, y0 + 19, 16, 2, 1, 0xFF2A2F3F);
+                    Shapes.roundFill(ctx, x + 3, y0 + 19, Math.max(1, (int) Math.round(16 * frac)), 2, 1, 0xFF000000 | c);
                 }
             }
-        }
-
-        // Screen outline.
-        if (atm.outline()) {
-            int c = 0xFF000000 | rgb;
-            ctx.fill(0, 0, w, 2, c);
-            ctx.fill(0, h - 2, w, h, c);
-            ctx.fill(0, 0, 2, h, c);
-            ctx.fill(w - 2, 0, w, h, c);
         }
     }
 

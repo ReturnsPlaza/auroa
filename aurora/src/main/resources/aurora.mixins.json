@@ -8,7 +8,8 @@
     "EntityMixin",
     "MinecraftClientAccessor",
     "InGameHudMixin",
-    "WorldMixin"
+    "WorldMixin",
+    "SkyMixin"
   ],
   "injectors": {
     "defaultRequire": 1
