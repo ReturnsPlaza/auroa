@@ -10,12 +10,14 @@ import net.minecraft.util.math.Vec3d;
  * everything drawn with it shows through walls.
  */
 public final class Projector {
+    public static final double NEAR = 0.05;
+
     public final int width;
     public final int height;
+    public final double camX;
+    public final double camY;
+    public final double camZ;
 
-    private final double px;
-    private final double py;
-    private final double pz;
     private final double rx;
     private final double rz;
     private final double ux;
@@ -30,9 +32,9 @@ public final class Projector {
     public Projector(MinecraftClient mc) {
         Camera cam = mc.gameRenderer.getCamera();
         Vec3d pos = cam.getCameraPos();
-        px = pos.x;
-        py = pos.y;
-        pz = pos.z;
+        camX = pos.x;
+        camY = pos.y;
+        camZ = pos.z;
 
         double yaw = Math.toRadians(cam.getYaw());
         double pitch = Math.toRadians(cam.getPitch());
@@ -56,19 +58,19 @@ public final class Projector {
         aspect = (double) mc.getWindow().getFramebufferWidth() / (double) mc.getWindow().getFramebufferHeight();
     }
 
-    /** Returns false when the point is behind the camera. out receives {x, y} in GUI pixels. */
-    public boolean project(double x, double y, double z, double[] out) {
-        double dx = x - px;
-        double dy = y - py;
-        double dz = z - pz;
-        double depth = dx * fx + dy * fy + dz * fz;
-        if (depth < 0.05) {
-            return false;
-        }
-        double xc = dx * rx + dz * rz;
-        double yc = dx * ux + dy * uy + dz * uz;
-        out[0] = width / 2.0 * (1 + xc / (depth * tanHalf * aspect));
-        out[1] = height / 2.0 * (1 - yc / (depth * tanHalf));
-        return true;
+    /** World position to camera space: out = {right, up, depth}. */
+    public void toCamera(double x, double y, double z, double[] out) {
+        double dx = x - camX;
+        double dy = y - camY;
+        double dz = z - camZ;
+        out[0] = dx * rx + dz * rz;
+        out[1] = dx * ux + dy * uy + dz * uz;
+        out[2] = dx * fx + dy * fy + dz * fz;
+    }
+
+    /** Camera space (depth must be above NEAR) to GUI pixels. */
+    public void toScreen(double[] cam, double[] out) {
+        out[0] = width / 2.0 * (1 + cam[0] / (cam[2] * tanHalf * aspect));
+        out[1] = height / 2.0 * (1 - cam[1] / (cam[2] * tanHalf));
     }
 }

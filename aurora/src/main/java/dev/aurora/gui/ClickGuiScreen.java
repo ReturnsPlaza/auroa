@@ -2,6 +2,8 @@ package dev.aurora.gui;
 
 import dev.aurora.AuroraClient;
 import dev.aurora.Config;
+import dev.aurora.Keys;
+import dev.aurora.hud.HudLayout;
 import dev.aurora.module.Category;
 import dev.aurora.module.Module;
 import dev.aurora.module.impl.InterfaceModule;
@@ -27,8 +29,9 @@ import java.util.Map;
  * visual change (open, close, toggles, hover, expanding, dragging) is eased
  * with {@link Anim} so nothing snaps.
  *
- * Left click a module to toggle it. Right click a module to open its settings.
+ * Left click a module to toggle it. Right click a module to open its settings and keybind.
  * Drag a panel by its header. Right click a header to collapse the panel.
+ * Drag the outlined HUD pieces (HUD, Radar, Module list, Target HUD) to move them.
  */
 public class ClickGuiScreen extends Screen {
     private static ClickGuiScreen instance;
@@ -46,7 +49,6 @@ public class ClickGuiScreen extends Screen {
     private static final int SET_BOOL = 13;
     private static final int SET_NUM = 19;
 
-    private static final int ACCENT = 0xFF4C8DFF;
     private static final int MARK = 0xFFFFC83D;
     private static final int PANEL_BG = 0xD00D0F13;
     private static final int HEADER_BG = 0xE8101319;
@@ -70,6 +72,7 @@ public class ClickGuiScreen extends Screen {
 
     private static final class Panel {
         final Category category;
+        final int index;
         double x;
         double y;
         boolean collapsed;
@@ -77,8 +80,9 @@ public class ClickGuiScreen extends Screen {
         final Anim ax;
         final Anim ay;
 
-        Panel(Category category, double x, double y) {
+        Panel(Category category, int index, double x, double y) {
             this.category = category;
+            this.index = index;
             this.x = x;
             this.y = y;
             this.ax = new Anim(x);
@@ -116,12 +120,16 @@ public class ClickGuiScreen extends Screen {
     private double mouseY;
     private double clipTop;
     private double clipBottom;
+    private int accent = 0xFF4C8DFF;
+
+    private Module listening;
+    private final boolean[] prevKeys = new boolean[400];
 
     private ClickGuiScreen() {
         super(Text.literal("Aurora"));
         int i = 0;
         for (Category c : Category.values()) {
-            panels.add(new Panel(c, 24 + i * (W + 10), 28));
+            panels.add(new Panel(c, i, 24 + i * (W + 10), 28));
             i++;
         }
     }
@@ -135,6 +143,7 @@ public class ClickGuiScreen extends Screen {
         tip.set(0);
         hits = new ArrayList<>();
         dragging = null;
+        listening = null;
         // The open key is usually still held down, so it only closes the menu after being released and pressed again.
         wasLeft = mouseDown(GLFW.GLFW_MOUSE_BUTTON_LEFT);
         wasRight = mouseDown(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
@@ -144,6 +153,12 @@ public class ClickGuiScreen extends Screen {
     @Override
     public boolean shouldPause() {
         return false;
+    }
+
+    @Override
+    public boolean shouldCloseOnEsc() {
+        // While a keybind is being picked, Escape cancels the pick instead of closing the menu.
+        return listening == null;
     }
 
     @Override
@@ -186,12 +201,42 @@ public class ClickGuiScreen extends Screen {
         mouseY = mc.mouse.getY() / scale;
     }
 
+    private void snapshotKeys() {
+        for (int k : Keys.all()) {
+            prevKeys[k] = Keys.down(k);
+        }
+    }
+
+    /** While waiting for a keybind: the first new key press is bound. Escape cancels, Backspace/Delete clears. */
+    private void pollBind() {
+        for (int k : Keys.all()) {
+            boolean down = Keys.down(k);
+            if (down && !prevKeys[k]) {
+                if (k == GLFW.GLFW_KEY_ESCAPE) {
+                    listening = null;
+                } else if (k == GLFW.GLFW_KEY_BACKSPACE || k == GLFW.GLFW_KEY_DELETE) {
+                    listening.key = -1;
+                    listening = null;
+                } else {
+                    listening.key = k;
+                    listening = null;
+                }
+            }
+            prevKeys[k] = down;
+            if (listening == null) {
+                return;
+            }
+        }
+    }
+
     private void processInput() {
         boolean left = mouseDown(GLFW.GLFW_MOUSE_BUTTON_LEFT);
         boolean right = mouseDown(GLFW.GLFW_MOUSE_BUTTON_RIGHT);
         boolean key = keyDown(closeKeyCode());
 
-        if (key && !wasKey) {
+        if (listening != null) {
+            pollBind();
+        } else if (key && !wasKey) {
             closing = true;
         }
         if (left && !wasLeft) {
@@ -255,6 +300,7 @@ public class ClickGuiScreen extends Screen {
     public void render(DrawContext ctx, int mx, int my, float delta) {
         InterfaceModule ui = AuroraClient.modules.get(InterfaceModule.class);
         double speed = ui.speed();
+        accent = Palette.of(ui.accent());
 
         updateMouse();
         processInput();
@@ -272,12 +318,50 @@ public class ClickGuiScreen extends Screen {
         nextHits = new ArrayList<>();
         hoveredDesc = null;
 
+        // HUD pieces you can drag. They are registered first so panels sit on top of them.
+        clipTop = 0;
+        clipBottom = height;
+        renderHudHandles(ctx, o);
+
         for (Panel p : new ArrayList<>(panels)) {
             renderPanel(ctx, p, o, speed);
         }
         renderTooltip(ctx, o, speed);
 
         hits = nextHits;
+    }
+
+    private void renderHudHandles(DrawContext ctx, double o) {
+        for (HudLayout.Element e : HudLayout.ELEMENTS) {
+            if (!e.shown) {
+                continue;
+            }
+            int ex = e.x(width);
+            int ey = e.y(height);
+            boolean hov = mouseX >= ex && mouseX < ex + e.w && mouseY >= ey && mouseY < ey + e.h;
+            double strength = (hov || (dragging != null && dragging.x() == ex && dragging.y() == ey)) ? 0.95 : 0.5;
+            int c = Colors.alpha(accent, strength * o);
+
+            ctx.fill(ex - 1, ey - 1, ex + e.w + 1, ey, c);
+            ctx.fill(ex - 1, ey + e.h, ex + e.w + 1, ey + e.h + 1, c);
+            ctx.fill(ex - 1, ey, ex, ey + e.h, c);
+            ctx.fill(ex + e.w, ey, ex + e.w + 1, ey + e.h, c);
+            text(ctx, e.name, ex, ey - 10, c);
+
+            final double[] grab = new double[2];
+            addHit(ex, ey, e.w, e.h, null, null, new Drag() {
+                @Override
+                public void start(double mx, double my) {
+                    grab[0] = mx - e.x(width);
+                    grab[1] = my - e.y(height);
+                }
+
+                @Override
+                public void move(double mx, double my) {
+                    e.setPos((int) Math.round(mx - grab[0]), (int) Math.round(my - grab[1]));
+                }
+            });
+        }
     }
 
     private Row row(Module m) {
@@ -289,15 +373,25 @@ public class ClickGuiScreen extends Screen {
     }
 
     private static double settingsHeight(Module m) {
-        double h = 0;
+        double h = SET_BOOL; // the keybind row
         for (Setting<?> s : m.settings()) {
+            if (s.hidden) {
+                continue;
+            }
             h += (s instanceof NumberSetting) ? SET_NUM : SET_BOOL;
         }
         return h;
     }
 
-    private void renderPanel(DrawContext ctx, Panel p, double o, double speed) {
-        double slide = (1 - o) * -16;
+    private static double smooth(double t) {
+        t = Math.max(0, Math.min(1, t));
+        return t * t * (3 - 2 * t);
+    }
+
+    private void renderPanel(DrawContext ctx, Panel p, double open, double speed) {
+        // Panels fade and slide in one after another.
+        double o = smooth(open * 1.6 - p.index * 0.22);
+        double slide = (1 - o) * -18;
         int x = (int) Math.round(p.ax.update(p.x, speed * 1.6));
         int y = (int) Math.round(p.ay.update(p.y, speed * 1.6) + slide);
         double c = p.collapse.update(p.collapsed ? 0 : 1, speed);
@@ -312,11 +406,11 @@ public class ClickGuiScreen extends Screen {
         // Body and header.
         ctx.fill(x, y, x + W, y + HEADER + visible, Colors.alpha(PANEL_BG, o));
         ctx.fill(x, y, x + W, y + HEADER, Colors.alpha(HEADER_BG, o));
-        ctx.fill(x, y + HEADER - 1, x + W, y + HEADER, Colors.alpha(ACCENT, 0.9 * o));
+        ctx.fill(x, y + HEADER - 1, x + W, y + HEADER, Colors.alpha(accent, 0.9 * o));
         text(ctx, p.category.display, x + 7, y + 5, Colors.alpha(MARK, o));
         text(ctx, p.collapsed ? "+" : "-", x + W - 11, y + 5, Colors.alpha(DIM, o));
 
-        // The panel background swallows clicks so panels underneath are not hit.
+        // The panel background swallows clicks so things underneath are not hit.
         clipTop = y;
         clipBottom = y + HEADER + visible;
         addHit(x, y, W, HEADER + visible, null, null, null);
@@ -370,23 +464,17 @@ public class ClickGuiScreen extends Screen {
             if (m.togglable) {
                 drawSwitch(ctx, x + W - 24, ry + 3, on, o);
             }
-            if (!m.settings().isEmpty()) {
-                text(ctx, ex > 0.5 ? "v" : ">", x + W - (m.togglable ? 34 : 14), ry + 3, Colors.alpha(DIM, o));
-            }
+            text(ctx, ex > 0.5 ? "v" : ">", x + W - (m.togglable ? 34 : 14), ry + 3, Colors.alpha(DIM, o));
 
             addHit(x, ry, W, ROW,
                     () -> {
                         if (m.togglable) {
                             m.toggle();
-                        } else if (!m.settings().isEmpty()) {
+                        } else {
                             r.expanded = !r.expanded;
                         }
                     },
-                    () -> {
-                        if (!m.settings().isEmpty()) {
-                            r.expanded = !r.expanded;
-                        }
-                    },
+                    () -> r.expanded = !r.expanded,
                     null);
 
             yy += ROW;
@@ -411,6 +499,9 @@ public class ClickGuiScreen extends Screen {
     private void renderSettings(DrawContext ctx, Module m, int x, int y0, double a, double speed) {
         int y = y0;
         for (Setting<?> s : m.settings()) {
+            if (s.hidden) {
+                continue;
+            }
             if (s instanceof BooleanSetting b) {
                 double target = b.on() ? 1 : 0;
                 double v = anim(b, target).update(target, speed);
@@ -421,7 +512,7 @@ public class ClickGuiScreen extends Screen {
             } else if (s instanceof ModeSetting md) {
                 String val = md.get();
                 text(ctx, md.name, x + 10, y + 3, Colors.alpha(DIM, a));
-                text(ctx, val, x + W - 8 - textWidth(val), y + 3, Colors.alpha(ACCENT, a));
+                text(ctx, val, x + W - 8 - textWidth(val), y + 3, Colors.alpha(accent, a));
                 addHit(x, y, W, SET_BOOL, md::cycle, null, null);
                 y += SET_BOOL;
             } else if (s instanceof NumberSetting n) {
@@ -435,7 +526,7 @@ public class ClickGuiScreen extends Screen {
                 int ty = y + 13;
                 int fw = (int) Math.round(tw * shown);
                 ctx.fill(tx, ty, tx + tw, ty + 3, Colors.alpha(TRACK_OFF, a));
-                ctx.fill(tx, ty, tx + fw, ty + 3, Colors.alpha(ACCENT, a));
+                ctx.fill(tx, ty, tx + fw, ty + 3, Colors.alpha(accent, a));
                 ctx.fill(tx + fw - 1, ty - 1, tx + fw + 2, ty + 4, Colors.alpha(0xFFFFFFFF, a));
 
                 addHit(x + 4, y, W - 8, SET_NUM, null, null, new Drag() {
@@ -452,10 +543,29 @@ public class ClickGuiScreen extends Screen {
                 y += SET_NUM;
             }
         }
+
+        // Keybind row. Click it, then press a key. Escape cancels, Backspace or Delete clears.
+        boolean waiting = listening == m;
+        String bind = waiting ? "PRESS A KEY" : Keys.name(m.key);
+        text(ctx, "Keybind", x + 10, y + 3, Colors.alpha(DIM, a));
+        text(ctx, bind, x + W - 8 - textWidth(bind), y + 3,
+                Colors.alpha(waiting ? MARK : (m.key >= 0 ? accent : DIM), a));
+        addHit(x, y, W, SET_BOOL,
+                () -> {
+                    listening = m;
+                    snapshotKeys();
+                },
+                () -> {
+                    m.key = -1;
+                    if (listening == m) {
+                        listening = null;
+                    }
+                },
+                null);
     }
 
     private void drawSwitch(DrawContext ctx, int x, int y, double on, double o) {
-        roundRect(ctx, x, y, 18, 8, Colors.alpha(Colors.lerp(TRACK_OFF, ACCENT, on), o));
+        roundRect(ctx, x, y, 18, 8, Colors.alpha(Colors.lerp(TRACK_OFF, accent, on), o));
         int knobX = x + 1 + (int) Math.round(on * 10);
         roundRect(ctx, knobX, y + 1, 6, 6, Colors.alpha(0xFFFFFFFF, o));
     }

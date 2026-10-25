@@ -14,8 +14,14 @@ public abstract class Module {
     public final String description;
     public final Category category;
 
-    /** Modules that only hold settings (like Interface) set this to false. */
+    /** Modules that only hold settings (like Aurora+) set this to false. */
     public boolean togglable = true;
+
+    /** GLFW key code, or -1 for none. */
+    public int key = -1;
+
+    /** When true the module is on only while its key is held down. */
+    public boolean holdKey;
 
     private boolean enabled;
     private final List<Setting<?>> settings = new ArrayList<>();
@@ -27,6 +33,13 @@ public abstract class Module {
     }
 
     protected <S extends Setting<?>> S add(S setting) {
+        settings.add(setting);
+        return setting;
+    }
+
+    /** Adds a setting that is saved but not shown in the menu. */
+    protected <S extends Setting<?>> S addHidden(S setting) {
+        setting.hidden = true;
         settings.add(setting);
         return setting;
     }

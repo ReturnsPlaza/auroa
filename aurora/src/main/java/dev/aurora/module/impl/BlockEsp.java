@@ -1,31 +1,80 @@
 package dev.aurora.module.impl;
 
+import dev.aurora.gui.Palette;
 import dev.aurora.hud.EspTarget;
-import dev.aurora.module.Category;
-import dev.aurora.module.Module;
+import dev.aurora.setting.ListSetting;
 import dev.aurora.setting.ModeSetting;
 import dev.aurora.setting.NumberSetting;
+import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.registry.Registries;
 import net.minecraft.registry.tag.BlockTags;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
-/** Outlines a chosen kind of block (ores by default) around you, through walls. */
-public class BlockEsp extends Module {
-    private final ModeSetting target = add(new ModeSetting("Target", "Ores", "Ores", "Diamond", "Debris", "Spawners"));
+/**
+ * Outlines blocks near you through walls. Pick a preset (Ores, Diamond, Debris,
+ * Spawners) or use Custom with any blocks you like, added with commands:
+ * /aurora blocks add minecraft:chest
+ */
+public class BlockEsp extends EspModule {
+    private final ModeSetting target = add(new ModeSetting("Target", "Ores",
+            "Ores", "Diamond", "Debris", "Spawners", "Custom"));
+    private final ModeSetting color = add(new ModeSetting("Color", "Auto",
+            concat("Auto", Palette.NAMES)));
     private final NumberSetting range = add(new NumberSetting("Range", 14, 6, 28, 2));
+    private final ListSetting blocks = addHidden(new ListSetting("blocks"));
 
     private volatile List<EspTarget> targets = Collections.emptyList();
     private int timer;
 
     public BlockEsp() {
-        super("Block ESP", "Outlines ores or other blocks near you through walls", Category.RENDER);
+        super("Block ESP", "Outlines ores or any blocks you choose through walls");
     }
 
+    private static String[] concat(String first, String[] rest) {
+        String[] out = new String[rest.length + 1];
+        out[0] = first;
+        System.arraycopy(rest, 0, out, 1, rest.length);
+        return out;
+    }
+
+    // ---- custom block list (used by the /aurora blocks commands)
+
+    public List<String> customBlocks() {
+        return blocks.get();
+    }
+
+    public boolean addBlock(Identifier id) {
+        if (!Registries.BLOCK.containsId(id)) {
+            return false;
+        }
+        String s = id.toString();
+        if (!blocks.get().contains(s)) {
+            blocks.get().add(s);
+        }
+        timer = 0;
+        return true;
+    }
+
+    public boolean removeBlock(Identifier id) {
+        timer = 0;
+        return blocks.get().remove(id.toString());
+    }
+
+    public void clearBlocks() {
+        blocks.get().clear();
+        timer = 0;
+    }
+
+    @Override
     public List<EspTarget> targets() {
         return targets;
     }
@@ -40,6 +89,20 @@ public class BlockEsp extends Module {
         }
         timer = 15;
 
+        Set<Block> custom = new HashSet<>();
+        if (target.is("Custom")) {
+            for (String s : blocks.get()) {
+                Identifier id = Identifier.tryParse(s);
+                if (id != null && Registries.BLOCK.containsId(id)) {
+                    custom.add(Registries.BLOCK.get(id));
+                }
+            }
+            if (custom.isEmpty()) {
+                targets = Collections.emptyList();
+                return;
+            }
+        }
+
         List<EspTarget> found = new ArrayList<>();
         BlockPos origin = mc.player.getBlockPos();
         int r = range.asInt();
@@ -52,10 +115,10 @@ public class BlockEsp extends Module {
                     if (state.isAir()) {
                         continue;
                     }
-                    int color = colorOf(state);
-                    if (color != 0) {
-                        found.add(new EspTarget(pos.toImmutable(), color));
-                        if (found.size() >= 500) {
+                    int c = colorOf(state, custom);
+                    if (c != 0) {
+                        found.add(new EspTarget(pos.toImmutable(), c));
+                        if (found.size() >= 1500) {
                             targets = found;
                             return;
                         }
@@ -66,7 +129,21 @@ public class BlockEsp extends Module {
         targets = found;
     }
 
-    private int colorOf(BlockState s) {
+    private int colorOf(BlockState s, Set<Block> custom) {
+        int natural = naturalColor(s, custom);
+        if (natural == 0) {
+            return 0;
+        }
+        return color.is("Auto") ? natural : Palette.of(color.get());
+    }
+
+    private int naturalColor(BlockState s, Set<Block> custom) {
+        if (target.is("Custom")) {
+            if (!custom.contains(s.getBlock())) {
+                return 0;
+            }
+            return Palette.hash(Registries.BLOCK.getId(s.getBlock()).toString());
+        }
         if (target.is("Diamond")) {
             return s.isIn(BlockTags.DIAMOND_ORES) ? 0xFF4DEBFF : 0;
         }

@@ -1,38 +1,48 @@
 package dev.aurora.module.impl;
 
 import dev.aurora.hud.EspTarget;
-import dev.aurora.module.Category;
-import dev.aurora.module.Module;
 import dev.aurora.setting.BooleanSetting;
 import dev.aurora.setting.NumberSetting;
+import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
+import net.minecraft.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.block.entity.BarrelBlockEntity;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.ChestBlockEntity;
+import net.minecraft.block.entity.EnchantingTableBlockEntity;
 import net.minecraft.block.entity.EnderChestBlockEntity;
+import net.minecraft.block.entity.MobSpawnerBlockEntity;
 import net.minecraft.block.entity.ShulkerBoxBlockEntity;
 import net.minecraft.block.entity.TrappedChestBlockEntity;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
+import net.minecraft.world.chunk.ChunkSection;
 import net.minecraft.world.chunk.WorldChunk;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/** Outlines chests, barrels, ender chests and shulker boxes through walls. */
-public class StorageEsp extends Module {
+/** Outlines containers and other storage-type blocks through walls. */
+public class StorageEsp extends EspModule {
     private final BooleanSetting chests = add(new BooleanSetting("Chests", true));
-    private final BooleanSetting barrels = add(new BooleanSetting("Barrels", true));
     private final BooleanSetting enderChests = add(new BooleanSetting("Ender chests", true));
-    private final BooleanSetting shulkers = add(new BooleanSetting("Shulkers", true));
-    private final NumberSetting range = add(new NumberSetting("Chunks", 6, 2, 12, 1));
+    private final BooleanSetting spawners = add(new BooleanSetting("Spawners", true));
+    private final BooleanSetting shulkers = add(new BooleanSetting("Shulker boxes", true));
+    private final BooleanSetting furnaces = add(new BooleanSetting("Furnaces", true));
+    private final BooleanSetting barrels = add(new BooleanSetting("Barrels", true));
+    private final BooleanSetting enchantingTables = add(new BooleanSetting("Enchanting tables", true));
+    private final BooleanSetting pistons = add(new BooleanSetting("Pistons", false));
+    private final NumberSetting chunks = add(new NumberSetting("Chunks", 6, 2, 12, 1));
 
     private volatile List<EspTarget> targets = Collections.emptyList();
     private int timer;
 
     public StorageEsp() {
-        super("Storage ESP", "Outlines chests, barrels and shulkers through walls", Category.RENDER);
+        super("Storage ESP", "Outlines chests, barrels, spawners and more through walls");
     }
 
+    @Override
     public List<EspTarget> targets() {
         return targets;
     }
@@ -49,7 +59,7 @@ public class StorageEsp extends Module {
 
         List<EspTarget> found = new ArrayList<>();
         ChunkPos center = mc.player.getChunkPos();
-        int r = range.asInt();
+        int r = chunks.asInt();
         for (int dx = -r; dx <= r; dx++) {
             for (int dz = -r; dz <= r; dz++) {
                 WorldChunk chunk = mc.world.getChunkManager().getWorldChunk(center.x + dx, center.z + dz);
@@ -62,9 +72,41 @@ public class StorageEsp extends Module {
                         found.add(new EspTarget(be.getPos(), color));
                     }
                 }
+                if (pistons.on()) {
+                    scanPistons(chunk, found);
+                }
             }
         }
         targets = found;
+    }
+
+    private void scanPistons(WorldChunk chunk, List<EspTarget> found) {
+        ChunkSection[] sections = chunk.getSectionArray();
+        ChunkPos cp = chunk.getPos();
+        for (int i = 0; i < sections.length; i++) {
+            ChunkSection section = sections[i];
+            if (section == null || section.isEmpty()) {
+                continue;
+            }
+            if (!section.hasAny(s -> s.isOf(Blocks.PISTON) || s.isOf(Blocks.STICKY_PISTON))) {
+                continue;
+            }
+            int baseY = chunk.sectionIndexToCoord(i) << 4;
+            for (int lx = 0; lx < 16; lx++) {
+                for (int ly = 0; ly < 16; ly++) {
+                    for (int lz = 0; lz < 16; lz++) {
+                        BlockState st = section.getBlockState(lx, ly, lz);
+                        if (st.isOf(Blocks.PISTON) || st.isOf(Blocks.STICKY_PISTON)) {
+                            found.add(new EspTarget(
+                                    new BlockPos(cp.getStartX() + lx, baseY + ly, cp.getStartZ() + lz), 0xFF8FD16B));
+                            if (found.size() > 3000) {
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private int colorOf(BlockEntity be) {
@@ -82,6 +124,15 @@ public class StorageEsp extends Module {
         }
         if (be instanceof ShulkerBoxBlockEntity) {
             return shulkers.on() ? 0xFF6ED3FF : 0;
+        }
+        if (be instanceof MobSpawnerBlockEntity) {
+            return spawners.on() ? 0xFFFF4DFF : 0;
+        }
+        if (be instanceof AbstractFurnaceBlockEntity) {
+            return furnaces.on() ? 0xFFBFC5CC : 0;
+        }
+        if (be instanceof EnchantingTableBlockEntity) {
+            return enchantingTables.on() ? 0xFF4DEBFF : 0;
         }
         return 0;
     }

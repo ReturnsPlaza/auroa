@@ -4,6 +4,7 @@ import dev.aurora.gui.ClickGuiScreen;
 import dev.aurora.hud.HudRenderer;
 import dev.aurora.module.ModuleManager;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -39,7 +40,9 @@ public class AuroraClient implements ClientModInitializer {
                     client.setScreen(ClickGuiScreen.get());
                 }
             }
-            if (client.player != null && client.world != null) {
+            boolean inWorld = client.player != null && client.world != null;
+            modules.pollKeys(inWorld && client.currentScreen == null);
+            if (inWorld) {
                 modules.tick();
             }
         });
@@ -49,6 +52,9 @@ public class AuroraClient implements ClientModInitializer {
                 VanillaHudElements.CHAT,
                 Identifier.of(ID, "hud"),
                 HudRenderer::render);
+
+        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) ->
+                Commands.register(dispatcher));
 
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> Config.save(modules));
     }

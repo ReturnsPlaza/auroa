@@ -2,9 +2,10 @@ package dev.aurora.mixin;
 
 import dev.aurora.AuroraClient;
 import dev.aurora.module.impl.Freecam;
+import dev.aurora.module.impl.FreeLook;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.render.Camera;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.client.render.Camera;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -23,18 +24,27 @@ public abstract class CameraMixin {
     private boolean thirdPerson;
 
     @Inject(method = "update", at = @At("RETURN"))
-    private void aurora$freecam(CallbackInfo ci) {
+    private void aurora$camera(CallbackInfo ci) {
         if (AuroraClient.modules == null) {
             return;
         }
-        Freecam freecam = AuroraClient.modules.get(Freecam.class);
         ClientPlayerEntity player = MinecraftClient.getInstance().player;
-        if (!freecam.isEnabled() || player == null) {
+        if (player == null) {
             return;
         }
         float t = ((Camera) (Object) this).getLastTickProgress();
-        setPos(freecam.camX(t), freecam.camY(t), freecam.camZ(t));
-        setRotation(player.getYaw(t), player.getPitch(t));
-        this.thirdPerson = true;
+
+        Freecam freecam = AuroraClient.modules.get(Freecam.class);
+        if (freecam.isEnabled()) {
+            setPos(freecam.camX(t), freecam.camY(t), freecam.camZ(t));
+            setRotation(player.getYaw(t), player.getPitch(t));
+            this.thirdPerson = true;
+            return;
+        }
+
+        FreeLook look = AuroraClient.modules.get(FreeLook.class);
+        if (look.isEnabled()) {
+            setRotation(look.yaw(), look.pitch());
+        }
     }
 }

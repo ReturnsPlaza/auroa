@@ -1,7 +1,14 @@
 package dev.aurora.hud;
 
 import dev.aurora.AuroraClient;
+import dev.aurora.gui.Colors;
+import dev.aurora.gui.Palette;
+import dev.aurora.module.Module;
+import dev.aurora.module.impl.CrosshairModule;
+import dev.aurora.module.impl.Friends;
+import dev.aurora.module.impl.Keystrokes;
 import dev.aurora.module.impl.HudModule;
+import dev.aurora.module.impl.InterfaceModule;
 import dev.aurora.module.impl.RadarModule;
 import dev.aurora.module.impl.TargetHud;
 import net.minecraft.client.MinecraftClient;
@@ -13,10 +20,12 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.hit.EntityHitResult;
+import net.minecraft.util.math.ChunkPos;
 
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
@@ -24,10 +33,9 @@ public final class HudRenderer {
     private HudRenderer() {
     }
 
-    private static final int ACCENT = 0xFF4C8DFF;
-    private static final int PILL_BG = 0xC0151A2B;
-    private static final int PILL_BORDER = 0xFF2A3150;
-    private static final int PILL_TEXT = 0xFFDDE3F5;
+    private static final int PILL_BORDER_DEFAULT = 0xFF2A3150;
+    private static final int PILL_BG_DEFAULT = 0xFF151A2B;
+    private static final int PILL_TEXT_DEFAULT = 0xFFDDE3F5;
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     private static int tickCount;
@@ -72,39 +80,90 @@ public final class HudRenderer {
 
         EspRenderer.render(ctx, mc);
 
-        int y = 4;
+        InterfaceModule ui = AuroraClient.modules.get(InterfaceModule.class);
+        boolean neon = "Neon Pink".equals(ui.theme());
+        int accent = neon ? 0xFFFF2E88 : Palette.of(ui.accent());
+
         HudModule hud = AuroraClient.modules.get(HudModule.class);
+        hud.infoElement.shown = hud.isEnabled();
+        hud.listElement.shown = hud.isEnabled() && hud.showModuleList();
         if (hud.isEnabled()) {
-            y = drawInfo(ctx, mc, hud, y);
+            drawInfo(ctx, mc, hud, accent, ui.theme());
+            if (hud.showModuleList()) {
+                drawModuleList(ctx, mc, hud, accent, ui.theme());
+            }
         }
 
         RadarModule radar = AuroraClient.modules.get(RadarModule.class);
+        radar.element.shown = radar.isEnabled();
         if (radar.isEnabled()) {
-            drawRadar(ctx, mc, radar, 6, y + 2);
+            drawRadar(ctx, mc, radar, accent, ui.theme());
         }
 
         TargetHud target = AuroraClient.modules.get(TargetHud.class);
+        target.element.shown = target.isEnabled();
         if (target.isEnabled()) {
-            drawTarget(ctx, mc);
+            drawTarget(ctx, mc, target, hud.opacity(), accent, ui.theme());
+        }
+
+        Keystrokes keys = AuroraClient.modules.get(Keystrokes.class);
+        keys.element.shown = keys.isEnabled();
+        if (keys.isEnabled()) {
+            drawKeystrokes(ctx, mc, keys, accent, ui.theme());
+        }
+
+        CrosshairModule crosshair = AuroraClient.modules.get(CrosshairModule.class);
+        if (crosshair.isEnabled()) {
+            drawCrosshair(ctx, mc, crosshair, neon ? 0xFFFF2E88 : Palette.of(crosshair.colorName()));
+        }
+
+        if (ui.showChunkGrid()) {
+            drawChunkGrid(ctx, mc, ui.theme());
         }
 
         Alerts.render(ctx, mc);
     }
 
-    // ---------------------------------------------------------------- info pills
+    // ---------------------------------------------------------------- theme
 
-    private static int drawInfo(DrawContext ctx, MinecraftClient mc, HudModule hud, int y) {
+    private static int[] getThemeColors(String theme) {
+        if ("Neon Pink".equals(theme)) {
+            return new int[]{0xFFFF2E88, 0xFF1A0B1F, 0xFFFFB3DA}; // border, bg, text
+        }
+        return new int[]{PILL_BORDER_DEFAULT, PILL_BG_DEFAULT, PILL_TEXT_DEFAULT};
+    }
+
+    // ---------------------------------------------------------------- pills
+
+    private static void pill(DrawContext ctx, TextRenderer tr, int x, int y, int w, String s,
+                             int textColor, int opacity, String theme) {
+        int[] colors = getThemeColors(theme);
+        ctx.fill(x, y, x + w, y + 13, (opacity << 24) | (colors[0] & 0xFFFFFF));
+        ctx.fill(x + 1, y + 1, x + w - 1, y + 12, (opacity << 24) | (colors[1] & 0xFFFFFF));
+        ctx.drawText(tr, s, x + 5, y + 3, textColor, false);
+    }
+
+    private static int rowWidth(TextRenderer tr, List<String> items) {
+        int w = 0;
+        for (String s : items) {
+            w += tr.getWidth(s) + 10 + 3;
+        }
+        return Math.max(0, w - 3);
+    }
+
+    private static void drawInfo(DrawContext ctx, MinecraftClient mc, HudModule hud, int accent, String theme) {
         TextRenderer tr = mc.textRenderer;
 
         List<String> top = new ArrayList<>();
-        top.add("AURORA+");
+        if (hud.showBrand()) {
+            top.add("AURORA+");
+        }
         if (hud.showFps()) {
             top.add(mc.getCurrentFps() + " FPS");
         }
         if (hud.showClock()) {
             top.add(LocalTime.now().format(CLOCK));
         }
-        y = drawRow(ctx, tr, y, top);
 
         List<String> bottom = new ArrayList<>();
         if (hud.showCoords()) {
@@ -122,7 +181,28 @@ public final class HudRenderer {
         if (hud.showSpeed()) {
             bottom.add(String.format(Locale.ROOT, "%.1f BPS", speed));
         }
-        return drawRow(ctx, tr, y, bottom);
+
+        int rows = (top.isEmpty() ? 0 : 1) + (bottom.isEmpty() ? 0 : 1);
+        HudLayout.Element el = hud.infoElement;
+        el.w = Math.max(40, Math.max(rowWidth(tr, top), rowWidth(tr, bottom)));
+        el.h = Math.max(13, rows * 16 - 3);
+
+        int x = el.x(mc.getWindow().getScaledWidth());
+        int y = el.y(mc.getWindow().getScaledHeight());
+        int opacity = hud.opacity();
+        int textColor = getThemeColors(theme)[2];
+        for (List<String> row : List.of(top, bottom)) {
+            if (row.isEmpty()) {
+                continue;
+            }
+            int px = x;
+            for (String s : row) {
+                int w = tr.getWidth(s) + 10;
+                pill(ctx, tr, px, y, w, s, s.equals("AURORA+") ? accent : textColor, opacity, theme);
+                px += w + 3;
+            }
+            y += 16;
+        }
     }
 
     private static int ping(MinecraftClient mc) {
@@ -133,24 +213,46 @@ public final class HudRenderer {
         return entry == null ? 0 : entry.getLatency();
     }
 
-    private static int drawRow(DrawContext ctx, TextRenderer tr, int y, List<String> items) {
-        if (items.isEmpty()) {
-            return y;
+    private static void drawModuleList(DrawContext ctx, MinecraftClient mc, HudModule hud, int accent, String theme) {
+        int[] colors = getThemeColors(theme);
+        TextRenderer tr = mc.textRenderer;
+        List<String> names = new ArrayList<>();
+        for (Module m : AuroraClient.modules.all()) {
+            if (m.isEnabled() && m.togglable && m != hud) {
+                names.add(m.name.toUpperCase(Locale.ROOT));
+            }
         }
-        int x = 4;
-        for (String s : items) {
-            int w = tr.getWidth(s) + 10;
-            ctx.fill(x, y, x + w, y + 13, PILL_BORDER);
-            ctx.fill(x + 1, y + 1, x + w - 1, y + 12, PILL_BG);
-            ctx.drawText(tr, s, x + 5, y + 3, s.equals("AURORA+") ? ACCENT : PILL_TEXT, false);
-            x += w + 3;
+        names.sort(Comparator.comparingInt((String s) -> tr.getWidth(s)).reversed());
+
+        HudLayout.Element el = hud.listElement;
+        int w = 40;
+        for (String s : names) {
+            w = Math.max(w, tr.getWidth(s) + 12);
         }
-        return y + 16;
+        el.w = w;
+        el.h = Math.max(13, names.size() * 15 - 2);
+
+        int x = el.x(mc.getWindow().getScaledWidth());
+        int y = el.y(mc.getWindow().getScaledHeight());
+        int opacity = hud.opacity();
+        for (String s : names) {
+            int pw = tr.getWidth(s) + 12;
+            int px = x + el.w - pw;
+            ctx.fill(px, y, px + pw, y + 13, (opacity << 24) | (colors[0] & 0xFFFFFF));
+            ctx.fill(px + 1, y + 1, px + pw - 1, y + 12, (opacity << 24) | (colors[1] & 0xFFFFFF));
+            ctx.fill(px + pw - 3, y + 1, px + pw - 1, y + 12, accent);
+            ctx.drawText(tr, s, px + 5, y + 3, colors[2], false);
+            y += 15;
+        }
     }
 
     // ---------------------------------------------------------------- target hud
 
-    private static void drawTarget(DrawContext ctx, MinecraftClient mc) {
+    private static void drawTarget(DrawContext ctx, MinecraftClient mc, TargetHud t, int opacity, int accent, String theme) {
+        int[] colors = getThemeColors(theme);
+        HudLayout.Element el = t.element;
+        el.w = 110;
+        el.h = 30;
         if (!(mc.crosshairTarget instanceof EntityHitResult hit) || !(hit.getEntity() instanceof LivingEntity le)) {
             return;
         }
@@ -161,60 +263,168 @@ public final class HudRenderer {
         String hpText = String.format(Locale.ROOT, "%.1f / %.1f HP", hp, max);
 
         int w = Math.max(110, Math.max(tr.getWidth(name), tr.getWidth(hpText)) + 12);
-        int x = mc.getWindow().getScaledWidth() / 2 + 18;
-        int y = mc.getWindow().getScaledHeight() / 2 + 14;
+        el.w = w;
+        int x = el.x(mc.getWindow().getScaledWidth());
+        int y = el.y(mc.getWindow().getScaledHeight());
 
-        ctx.fill(x, y, x + w, y + 30, PILL_BORDER);
-        ctx.fill(x + 1, y + 1, x + w - 1, y + 29, PILL_BG);
-        ctx.drawText(tr, name, x + 5, y + 4, PILL_TEXT, false);
-        ctx.drawText(tr, hpText, x + 5, y + 14, 0xFF8C919B, false);
+        ctx.fill(x, y, x + w, y + 30, colors[0]);
+        ctx.fill(x + 1, y + 1, x + w - 1, y + 29, (opacity << 24) | (colors[1] & 0xFFFFFF));
+        ctx.fill(x + 1, y + 1, x + 3, y + 29, accent);
+        ctx.drawText(tr, name, x + 7, y + 4, colors[2], false);
+        ctx.drawText(tr, hpText, x + 7, y + 14, 0xFF8C919B, false);
 
-        int barW = w - 10;
+        int barW = w - 14;
         double frac = Math.max(0, Math.min(1, hp / max));
         int color = frac > 0.5 ? 0xFF5CE07B : (frac > 0.25 ? 0xFFFFC83D : 0xFFFF4A4A);
-        ctx.fill(x + 5, y + 24, x + 5 + barW, y + 27, 0xFF2A2F3F);
-        ctx.fill(x + 5, y + 24, x + 5 + (int) Math.round(barW * frac), y + 27, color);
+        ctx.fill(x + 7, y + 24, x + 7 + barW, y + 27, 0xFF2A2F3F);
+        ctx.fill(x + 7, y + 24, x + 7 + (int) Math.round(barW * frac), y + 27, color);
+    }
+
+    // ---------------------------------------------------------------- keystrokes
+
+    private static void drawKey(DrawContext ctx, TextRenderer tr, int x, int y, int w, String label,
+                                boolean pressed, int accent, int[] colors, int alpha) {
+        ctx.fill(x, y, x + w, y + 18, (alpha << 24) | (colors[0] & 0xFFFFFF));
+        ctx.fill(x + 1, y + 1, x + w - 1, y + 17, pressed
+                ? ((alpha << 24) | (accent & 0xFFFFFF))
+                : ((alpha << 24) | (colors[1] & 0xFFFFFF)));
+        int tc = pressed ? 0xFFFFFFFF : colors[2];
+        ctx.drawText(tr, label, x + (w - tr.getWidth(label)) / 2, y + 5, tc, false);
+    }
+
+    private static void drawKeystrokes(DrawContext ctx, MinecraftClient mc, Keystrokes ks, int accent, String theme) {
+        TextRenderer tr = mc.textRenderer;
+        boolean cps = ks.showCps();
+        HudLayout.Element el = ks.element;
+        el.w = 58;
+        el.h = cps ? 74 : 58;
+        int x = el.x(mc.getWindow().getScaledWidth());
+        int y = el.y(mc.getWindow().getScaledHeight());
+        int[] colors = getThemeColors(theme);
+        int alpha = ks.alpha();
+
+        drawKey(ctx, tr, x + 20, y, 18, "W", mc.options.forwardKey.isPressed(), accent, colors, alpha);
+        drawKey(ctx, tr, x, y + 20, 18, "A", mc.options.leftKey.isPressed(), accent, colors, alpha);
+        drawKey(ctx, tr, x + 20, y + 20, 18, "S", mc.options.backKey.isPressed(), accent, colors, alpha);
+        drawKey(ctx, tr, x + 40, y + 20, 18, "D", mc.options.rightKey.isPressed(), accent, colors, alpha);
+        drawKey(ctx, tr, x, y + 40, 28, "LMB", mc.options.attackKey.isPressed(), accent, colors, alpha);
+        drawKey(ctx, tr, x + 30, y + 40, 28, "RMB", mc.options.useKey.isPressed(), accent, colors, alpha);
+        if (cps) {
+            String s = ks.cps(true) + " CPS   " + ks.cps(false) + " CPS";
+            ctx.drawText(tr, s, x + (58 - tr.getWidth(s)) / 2, y + 62, colors[2], false);
+        }
+    }
+
+    // ---------------------------------------------------------------- crosshair
+
+    private static void drawCrosshair(DrawContext ctx, MinecraftClient mc, CrosshairModule ch, int color) {
+        int cx = mc.getWindow().getScaledWidth() / 2;
+        int cy = mc.getWindow().getScaledHeight() / 2;
+        int size = ch.size();
+        int gap = ch.gap();
+        int t = ch.thickness();
+        int h = t / 2;
+        ctx.fill(cx - gap - size, cy - h, cx - gap, cy - h + t, color);
+        ctx.fill(cx + gap, cy - h, cx + gap + size, cy - h + t, color);
+        ctx.fill(cx - h, cy - gap - size, cx - h + t, cy - gap, color);
+        ctx.fill(cx - h, cy + gap, cx - h + t, cy + gap + size, color);
+        if (ch.dot()) {
+            ctx.fill(cx - h, cy - h, cx - h + t, cy - h + t, color);
+        }
+    }
+
+    // ---------------------------------------------------------------- chunk grid
+
+    /** A 3x3 chunk map around the player with the current chunk highlighted. */
+    private static void drawChunkGrid(DrawContext ctx, MinecraftClient mc, String theme) {
+        TextRenderer tr = mc.textRenderer;
+        ChunkPos cp = mc.player.getChunkPos();
+        boolean neon = "Neon Pink".equals(theme);
+        int[] colors = getThemeColors(theme);
+        int cell = 14;
+        int gx = 6;
+        int gy = mc.getWindow().getScaledHeight() - 6 - 3 * cell - 14;
+        int here = neon ? 0xFFFF2E88 : 0xFF4C8DFF;
+
+        ctx.fill(gx - 2, gy - 2, gx + 3 * cell + 2, gy + 3 * cell + 2, colors[0]);
+        ctx.fill(gx - 1, gy - 1, gx + 3 * cell + 1, gy + 3 * cell + 1, colors[1]);
+        for (int dz = -1; dz <= 1; dz++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                int x0 = gx + (dx + 1) * cell;
+                int y0 = gy + (dz + 1) * cell;
+                boolean center = dx == 0 && dz == 0;
+                ctx.fill(x0 + 1, y0 + 1, x0 + cell - 1, y0 + cell - 1, center ? here : 0x30FFFFFF);
+            }
+        }
+        String label = "CHUNK " + cp.x + ", " + cp.z;
+        ctx.drawText(tr, label, gx, gy - 12, colors[2], true);
     }
 
     // ---------------------------------------------------------------- radar
 
-    private static void drawRadar(DrawContext ctx, MinecraftClient mc, RadarModule radar, int x, int y) {
-        int r = radar.radius();
-        int cx = x + r;
-        int cy = y + r;
-        double range = radar.range();
-
-        // Disc with a ring, drawn one scanline at a time.
+    private static void disc(DrawContext ctx, int cx, int cy, int r, int fill, int rim) {
         for (int dy = -r; dy < r; dy++) {
             int half = (int) Math.round(Math.sqrt((double) r * r - (double) dy * dy));
             int next = (int) Math.round(Math.sqrt(Math.max(0.0, (double) r * r - (double) (dy + 1) * (dy + 1))));
             int edge = Math.min(half * 2, Math.max(1, Math.abs(half - next)));
-            ctx.fill(cx - half, cy + dy, cx + half, cy + dy + 1, 0x886C69D6);
-            ctx.fill(cx - half, cy + dy, cx - half + edge, cy + dy + 1, 0xFFA9A6F0);
-            ctx.fill(cx + half - edge, cy + dy, cx + half, cy + dy + 1, 0xFFA9A6F0);
+            if ((fill >>> 24) != 0) {
+                ctx.fill(cx - half, cy + dy, cx + half, cy + dy + 1, fill);
+            }
+            if ((rim >>> 24) != 0) {
+                ctx.fill(cx - half, cy + dy, cx - half + edge, cy + dy + 1, rim);
+                ctx.fill(cx + half - edge, cy + dy, cx + half, cy + dy + 1, rim);
+            }
         }
-        int inner = r / 2;
-        for (int dy = -inner; dy < inner; dy++) {
-            int half = (int) Math.round(Math.sqrt((double) inner * inner - (double) dy * dy));
-            ctx.fill(cx - half, cy + dy, cx + half, cy + dy + 1, 0x1CFFFFFF);
-        }
-        ctx.fill(cx - r + 2, cy, cx + r - 2, cy + 1, 0x18FFFFFF);
-        ctx.fill(cx, cy - r + 2, cx + 1, cy + r - 2, 0x18FFFFFF);
+    }
 
+    private static void drawRadar(DrawContext ctx, MinecraftClient mc, RadarModule radar, int accent, String theme) {
+        TextRenderer tr = mc.textRenderer;
+        int r = radar.radius();
+        HudLayout.Element el = radar.element;
+        el.w = r * 2;
+        el.h = r * 2 + (radar.showCoords() ? 14 : 0);
+
+        int x = el.x(mc.getWindow().getScaledWidth());
+        int y = el.y(mc.getWindow().getScaledHeight());
+        int cx = x + r;
+        int cy = y + r;
+        double range = radar.range();
+
+        int rgb = ("Neon Pink".equals(theme) ? 0xFF2E88 : Palette.of(radar.colorName())) & 0xFFFFFF;
+        int fill = (radar.opacity() << 24) | rgb;
+        int rim = Colors.lerp(0xFF000000 | rgb, 0xFFFFFFFF, 0.45);
+
+        disc(ctx, cx, cy, r, fill, rim);
+        if (radar.showRings()) {
+            disc(ctx, cx, cy, Math.max(2, r / 2), 0, 0x38FFFFFF);
+            ctx.fill(cx - r + 2, cy, cx + r - 2, cy + 1, 0x20FFFFFF);
+            ctx.fill(cx, cy - r + 2, cx + 1, cy + r - 2, 0x20FFFFFF);
+        }
+
+        boolean rotate = radar.rotate();
         double yaw = Math.toRadians(mc.player.getYaw());
-        double sin = Math.sin(yaw);
-        double cos = Math.cos(yaw);
+        double sin = rotate ? Math.sin(yaw) : 0;
+        double cos = rotate ? Math.cos(yaw) : 1;
         double scale = r / range;
 
-        // Compass "N" that rotates with the view (north is -Z).
-        double nf = -cos;
-        double nr = sin;
-        int nx = cx + (int) Math.round(nr * (r - 7));
-        int ny = cy - (int) Math.round(nf * (r - 7));
-        ctx.drawText(mc.textRenderer, "N", nx - 2, ny - 4, 0xFFFFFFFF, false);
+        if (radar.showCompass()) {
+            String[] letters = {"N", "E", "S", "W"};
+            double[][] dirs = {{0, -1}, {1, 0}, {0, 1}, {-1, 0}};
+            for (int i = 0; i < 4; i++) {
+                double wx = dirs[i][0];
+                double wz = dirs[i][1];
+                double fwd = -wx * sin + wz * cos;
+                double right = -wx * cos - wz * sin;
+                int lx = cx + (int) Math.round(right * (r - 7));
+                int ly = cy - (int) Math.round(fwd * (r - 7));
+                ctx.drawText(tr, letters[i], lx - 2, ly - 4, i == 0 ? accent : 0xFFE8EAEE, false);
+            }
+        }
 
+        Friends friends = AuroraClient.modules.get(Friends.class);
         double px = mc.player.getX();
         double pz = mc.player.getZ();
+        int dot = radar.dot();
         for (Entity e : mc.world.getEntities()) {
             if (e == mc.player || !(e instanceof LivingEntity)) {
                 continue;
@@ -247,11 +457,25 @@ public final class HudRenderer {
             double right = -dx * cos - dz * sin;
             int sx = cx + (int) Math.round(right * scale);
             int sy = cy - (int) Math.round(forward * scale);
-            int color = isPlayer ? 0xFFFF5555 : (isHostile ? 0xFFFFAA33 : 0xFF7BE07B);
-            ctx.fill(sx - 1, sy - 1, sx + 2, sy + 2, color);
+            int color;
+            if (isPlayer) {
+                color = friends.isFriend(((PlayerEntity) e).getGameProfile().name()) ? 0xFF55FFFF : 0xFFFF5555;
+            } else {
+                color = isHostile ? 0xFFFFAA33 : 0xFF7BE07B;
+            }
+            int h = dot / 2;
+            ctx.fill(sx - h, sy - h, sx - h + dot, sy - h + dot, color);
         }
 
         // You, in the middle.
         ctx.fill(cx - 1, cy - 1, cx + 2, cy + 2, 0xFFFFFFFF);
+
+        if (radar.showCoords()) {
+            String s = String.format(Locale.ROOT, "%d, %d, %d",
+                    (int) Math.floor(mc.player.getX()),
+                    (int) Math.floor(mc.player.getY()),
+                    (int) Math.floor(mc.player.getZ()));
+            ctx.drawText(tr, s, cx - tr.getWidth(s) / 2, cy + r + 4, 0xFFFFFFFF, true);
+        }
     }
 }

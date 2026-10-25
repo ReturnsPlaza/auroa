@@ -12,7 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Properties;
 
-/** Saves which modules are on and their settings to config/aurora.properties. */
+/** Saves which modules are on, their settings and keybinds to config/aurora.properties. */
 public final class Config {
     private Config() {
     }
@@ -37,6 +37,13 @@ public final class Config {
             if (enabled != null && m.togglable) {
                 m.loadEnabled(Boolean.parseBoolean(enabled));
             }
+            String key = props.getProperty(m.name + ".key");
+            if (key != null) {
+                try {
+                    m.key = Integer.parseInt(key);
+                } catch (NumberFormatException ignored) {
+                }
+            }
             for (Setting<?> s : m.settings()) {
                 String v = props.getProperty(m.name + "." + s.name);
                 if (v != null) {
@@ -52,6 +59,7 @@ public final class Config {
             if (m.togglable) {
                 props.setProperty(m.name + ".enabled", Boolean.toString(m.isEnabled()));
             }
+            props.setProperty(m.name + ".key", Integer.toString(m.key));
             for (Setting<?> s : m.settings()) {
                 props.setProperty(m.name + "." + s.name, s.serialize());
             }

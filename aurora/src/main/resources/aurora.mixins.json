@@ -5,7 +5,9 @@
   "mixins": [],
   "client": [
     "CameraMixin",
-    "MinecraftClientAccessor"
+    "EntityMixin",
+    "MinecraftClientAccessor",
+    "InGameHudMixin"
   ],
   "injectors": {
     "defaultRequire": 1
