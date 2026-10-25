@@ -7,7 +7,6 @@ import dev.aurora.module.Module;
 import dev.aurora.module.impl.Atmosphere;
 import dev.aurora.module.impl.CustomHotbar;
 import dev.aurora.module.impl.CrosshairModule;
-import dev.aurora.module.impl.Equipment;
 import dev.aurora.module.impl.Friends;
 import dev.aurora.module.impl.Keystrokes;
 import dev.aurora.module.impl.HudModule;
@@ -129,12 +128,6 @@ public final class HudRenderer {
         CustomHotbar hotbar = AuroraClient.modules.get(CustomHotbar.class);
         if (hotbar.isEnabled()) {
             drawHotbar(ctx, mc, hotbar, ui.theme());
-        }
-
-        Equipment equipment = AuroraClient.modules.get(Equipment.class);
-        equipment.element.shown = equipment.isEnabled();
-        if (equipment.isEnabled()) {
-            drawEquipment(ctx, mc, equipment, ui.theme());
         }
 
         if (ui.showChunkGrid()) {
@@ -310,7 +303,7 @@ public final class HudRenderer {
         int sh = mc.getWindow().getScaledHeight();
         boolean neon = "Neon Pink".equals(theme);
         int[] colors = getThemeColors(theme);
-        int selectedColor = neon ? 0xFFFF2E88 : 0xFFC9A7FF; // light purple, pink in Neon Pink
+        int selectedColor = neon ? 0xFFFF8FCB : 0xFFE0B3FF; // light purple, light pink in Neon Pink
         int alpha = hb.alpha();
         int selected = mc.player.getInventory().getSelectedSlot();
 
@@ -320,8 +313,15 @@ public final class HudRenderer {
         for (int i = 0; i < 9; i++) {
             int x = x0 + i * 24;
             boolean sel = i == selected;
-            ctx.fill(x, y0, x + 22, y0 + 22, (alpha << 24) | ((sel ? selectedColor : colors[0]) & 0xFFFFFF));
-            ctx.fill(x + 1, y0 + 1, x + 21, y0 + 21, (alpha << 24) | (colors[1] & 0xFFFFFF));
+            if (sel) {
+                // Faint purple glow, solid purple border, dark purple inside.
+                ctx.fill(x - 2, y0 - 2, x + 24, y0 + 24, 0x40000000 | (selectedColor & 0xFFFFFF));
+                ctx.fill(x, y0, x + 22, y0 + 22, 0xFF000000 | (selectedColor & 0xFFFFFF));
+                ctx.fill(x + 2, y0 + 2, x + 20, y0 + 20, (alpha << 24) | 0x2A1B47);
+            } else {
+                ctx.fill(x, y0, x + 22, y0 + 22, (alpha << 24) | (colors[0] & 0xFFFFFF));
+                ctx.fill(x + 1, y0 + 1, x + 21, y0 + 21, (alpha << 24) | (colors[1] & 0xFFFFFF));
+            }
             ItemStack stack = mc.player.getInventory().getStack(i);
             if (!stack.isEmpty()) {
                 ctx.drawItem(stack, x + 3, y0 + 3);
@@ -370,36 +370,6 @@ public final class HudRenderer {
             ctx.fill(0, h - 2, w, h, c);
             ctx.fill(0, 0, 2, h, c);
             ctx.fill(w - 2, 0, w, h, c);
-        }
-    }
-
-    // ---------------------------------------------------------------- equipment
-
-    private static void slot(DrawContext ctx, int x, int y, ItemStack stack, int[] colors) {
-        ctx.fill(x, y, x + 22, y + 22, 0xFF000000 | (colors[0] & 0xFFFFFF));
-        ctx.fill(x + 1, y + 1, x + 21, y + 21, 0xFF000000 | (colors[1] & 0xFFFFFF));
-        if (!stack.isEmpty()) {
-            ctx.drawItem(stack, x + 3, y + 3);
-        }
-    }
-
-    private static void drawEquipment(DrawContext ctx, MinecraftClient mc, Equipment eq, String theme) {
-        HudLayout.Element el = eq.element;
-        int x = el.x(mc.getWindow().getScaledWidth());
-        int y = el.y(mc.getWindow().getScaledHeight());
-        int[] colors = getThemeColors(theme);
-
-        // Armor slots in the inventory: index 3 is the helmet, index 0 is the boots. Helmet first.
-        List<ItemStack> armor = new ArrayList<>();
-        for (int i = 3; i >= 0; i--) {
-            armor.add(mc.player.getInventory().getArmorStack(i));
-        }
-
-        slot(ctx, x, y, mc.player.getOffHandStack(), colors);
-        slot(ctx, x + 25, y, mc.player.getMainHandStack(), colors);
-        for (int i = 0; i < 4; i++) {
-            ItemStack s = i < armor.size() ? armor.get(i) : ItemStack.EMPTY;
-            slot(ctx, x + 56 + i * 25, y, s, colors);
         }
     }
 
