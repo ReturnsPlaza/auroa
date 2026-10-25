@@ -13,7 +13,7 @@ import dev.aurora.module.impl.CustomHotbar;
 import dev.aurora.module.impl.CrosshairModule;
 import dev.aurora.module.impl.Friends;
 import dev.aurora.module.impl.EntityEsp;
-import dev.aurora.module.impl.HeldItem;
+import dev.aurora.module.impl.ArmorHud;
 import dev.aurora.module.impl.Keystrokes;
 import dev.aurora.module.impl.Nametags;
 import dev.aurora.module.impl.HudModule;
@@ -131,10 +131,10 @@ public final class HudRenderer {
             drawEntityTracers(ctx, mc, entityEsp.glowing());
         }
 
-        HeldItem held = AuroraClient.modules.get(HeldItem.class);
-        held.element.shown = held.isEnabled();
-        if (held.isEnabled()) {
-            drawHeldItem(ctx, mc, held, ui.theme());
+        ArmorHud armor = AuroraClient.modules.get(ArmorHud.class);
+        armor.element.shown = armor.isEnabled();
+        if (armor.isEnabled()) {
+            drawArmor(ctx, mc, armor, ui.theme());
         }
 
         Keystrokes keys = AuroraClient.modules.get(Keystrokes.class);
@@ -194,34 +194,18 @@ public final class HudRenderer {
         List<String> top = new ArrayList<>();
         if (hud.showBrand()) {
             top.add(nameTag);
-            ChunkPos here = mc.player.getChunkPos();
-            top.add("CHUNK " + here.x + ", " + here.z + "  LOCAL "
-                    + Math.floorMod((int) Math.floor(mc.player.getX()), 16) + ", "
-                    + Math.floorMod((int) Math.floor(mc.player.getZ()), 16));
         }
         if (hud.showFps()) {
             top.add(mc.getCurrentFps() + " FPS");
         }
-        if (hud.showClock()) {
-            top.add(LocalTime.now().format(CLOCK));
-        }
-
-        List<String> bottom = new ArrayList<>();
         if (hud.showCoords()) {
-            bottom.add(String.format(Locale.ROOT, "%d %d %d XYZ",
+            top.add(String.format(Locale.ROOT, "%d %d %d",
                     (int) Math.floor(mc.player.getX()),
                     (int) Math.floor(mc.player.getY()),
                     (int) Math.floor(mc.player.getZ())));
         }
-        if (hud.showPing()) {
-            bottom.add(ping(mc) + " PING");
-        }
-        if (hud.showTicks()) {
-            bottom.add(String.format(Locale.ROOT, "%.1f TICKS", ticksPerSecond));
-        }
-        if (hud.showSpeed()) {
-            bottom.add(String.format(Locale.ROOT, "%.1f BPS", speed));
-        }
+
+        List<String> bottom = new ArrayList<>();
 
         int rows = (top.isEmpty() ? 0 : 1) + (bottom.isEmpty() ? 0 : 1);
         HudLayout.Element el = hud.infoElement;
@@ -479,30 +463,43 @@ public final class HudRenderer {
         }
     }
 
-    private static void drawHeldItem(DrawContext ctx, MinecraftClient mc, HeldItem hi, String theme) {
-        HudLayout.Element el = hi.element;
+    /** Four worn armour pieces, helmet first, each with its icon, durability bar and remaining uses. */
+    private static void drawArmor(DrawContext ctx, MinecraftClient mc, ArmorHud ah, String theme) {
+        HudLayout.Element el = ah.element;
         int[] colors = getThemeColors(theme);
-        ItemStack stack = mc.player.getMainHandStack();
-        String label = stack.isEmpty() ? "Nothing held" : stack.getName().getString();
-        int w = Math.max(96, Fonts.width(label) + 36);
+        int w = 112;
+        int rowH = 20;
+        int h = 4 * rowH + 6;
         el.w = w;
-        el.h = 24;
+        el.h = h;
         int x = el.x(mc.getWindow().getScaledWidth());
         int y = el.y(mc.getWindow().getScaledHeight());
-        Shapes.roundFill(ctx, x, y, w, 24, 8, (230 << 24) | (colors[0] & 0xFFFFFF));
-        Shapes.roundFill(ctx, x + 1, y + 1, w - 2, 22, 7, (230 << 24) | (colors[1] & 0xFFFFFF));
-        if (!stack.isEmpty()) {
-            ctx.drawItem(stack, x + 4, y + 4);
-        }
-        Fonts.draw(ctx, label, x + 26, y + 5, colors[2], false);
-        if (!stack.isEmpty() && stack.isDamageable()) {
-            int max = Math.max(1, stack.getMaxDamage());
-            double frac = Math.max(0, Math.min(1, (max - stack.getDamage()) / (double) max));
-            int barW = w - 30;
-            int fill = (int) Math.round(barW * frac);
-            int c = frac > 0.5 ? 0xFF5CE07B : (frac > 0.25 ? 0xFFFFC83D : 0xFFFF4A4A);
-            Shapes.roundFill(ctx, x + 26, y + 17, barW, 3, 1, 0xFF2A2F3F);
-            Shapes.roundFill(ctx, x + 26, y + 17, fill, 3, 1, c);
+        Shapes.roundFill(ctx, x, y, w, h, 8, (230 << 24) | (colors[0] & 0xFFFFFF));
+        Shapes.roundFill(ctx, x + 1, y + 1, w - 2, h - 2, 7, (230 << 24) | (colors[1] & 0xFFFFFF));
+        for (int i = 0; i < 4; i++) {
+            // Armour slots: 3 = helmet, 2 = chestplate, 1 = leggings, 0 = boots.
+            ItemStack stack = mc.player.getInventory().getArmorStack(3 - i);
+            int ry = y + 3 + i * rowH;
+            if (stack.isEmpty()) {
+                Fonts.draw(ctx, "EMPTY", x + 8, ry + 5, (colors[2] & 0xFFFFFF) | 0x80000000, false);
+                continue;
+            }
+            ctx.drawItem(stack, x + 6, ry + 2);
+            if (stack.isDamageable()) {
+                int max = Math.max(1, stack.getMaxDamage());
+                int left = Math.max(0, max - stack.getDamage());
+                double frac = Math.max(0, Math.min(1, left / (double) max));
+                int barX = x + 30;
+                int barW = w - 30 - 34;
+                int fill = (int) Math.round(barW * frac);
+                int c = frac > 0.5 ? 0xFF5CE07B : (frac > 0.25 ? 0xFFFF9A3D : 0xFFFF4A4A);
+                Shapes.roundFill(ctx, barX, ry + 8, barW, 4, 2, 0xFF2A2F3F);
+                if (fill > 0) {
+                    Shapes.roundFill(ctx, barX, ry + 8, fill, 4, 2, c);
+                }
+                String num = String.valueOf(left);
+                Fonts.draw(ctx, num, x + w - 6 - Fonts.width(num), ry + 5, colors[2], false);
+            }
         }
     }
 
@@ -570,7 +567,7 @@ public final class HudRenderer {
         int cell = 18;
         int gx = 6;
         int gy = mc.getWindow().getScaledHeight() - 6 - 3 * cell - 14;
-        int here = neon ? 0xFFFF2E88 : 0xFF4C8DFF;
+        int here = neon ? 0xFFFF2E88 : 0xFFA06BFF;
 
         ctx.fill(gx - 2, gy - 2, gx + 3 * cell + 2, gy + 3 * cell + 2, colors[0]);
         ctx.fill(gx - 1, gy - 1, gx + 3 * cell + 1, gy + 3 * cell + 1, colors[1]);

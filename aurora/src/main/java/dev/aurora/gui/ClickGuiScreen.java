@@ -53,14 +53,14 @@ public class ClickGuiScreen extends Screen {
     private static final int SET_NUM = 19;
 
     // Non-final so the theme can swap them each frame (see render).
-    private int MARK = 0xFFFFC83D;
+    private int MARK = 0xFFA06BFF;
     private int PANEL_BG = 0xD00D0F13;
     private int HEADER_BG = 0xE8101319;
     private static final int ROW_HOVER = 0x28FFFFFF;
     private static final int TEXT = 0xFFE8EAEE;
     private static final int DIM = 0xFF8C919B;
     private static final int TRACK_OFF = 0xFF3A3E47;
-    private int ENABLED = 0xFF8FC4FF;
+    private int ENABLED = 0xFFD9B8FF;
 
     private interface Drag {
         void start(double mx, double my);
@@ -124,7 +124,7 @@ public class ClickGuiScreen extends Screen {
     private double mouseY;
     private double clipTop;
     private double clipBottom;
-    private int accent = 0xFF4C8DFF;
+    private int accent = 0xFFA06BFF;
 
     private Module listening;
     private final boolean[] prevKeys = new boolean[Keys.MOUSE_BASE + 8];
@@ -306,10 +306,10 @@ public class ClickGuiScreen extends Screen {
         double speed = ui.speed();
         boolean neon = "Neon Pink".equals(ui.theme());
         accent = neon ? 0xFFFF2E88 : Palette.of(ui.accent());
-        MARK = neon ? 0xFFFF2E88 : 0xFFFFC83D;
+        MARK = neon ? 0xFFFF2E88 : 0xFFA06BFF;
         PANEL_BG = neon ? 0xD01A0B1F : 0xD00D0F13;
         HEADER_BG = neon ? 0xE8240F2B : 0xE8101319;
-        ENABLED = neon ? 0xFFFFB3DA : 0xFF8FC4FF;
+        ENABLED = neon ? 0xFFFFB3DA : 0xFFD9B8FF;
 
         updateMouse();
         processInput();
