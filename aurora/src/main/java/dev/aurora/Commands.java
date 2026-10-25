@@ -64,6 +64,42 @@ public final class Commands {
                                     say(c.getSource(), "Block ESP: custom list cleared");
                                     return 1;
                                 })))
+                .then(literal("config")
+                        .then(literal("save")
+                                .then(argument("name", StringArgumentType.word())
+                                        .executes(c -> {
+                                            String n = Config.cleanName(StringArgumentType.getString(c, "name"));
+                                            if (n == null) {
+                                                say(c.getSource(), "Config: use letters, numbers, - or _");
+                                                return 1;
+                                            }
+                                            Config.saveNamed(AuroraClient.modules, n);
+                                            say(c.getSource(), "Config saved: " + n);
+                                            return 1;
+                                        })))
+                        .then(literal("load")
+                                .then(argument("name", StringArgumentType.word())
+                                        .executes(c -> {
+                                            String n = Config.cleanName(StringArgumentType.getString(c, "name"));
+                                            boolean ok = n != null && Config.loadNamed(AuroraClient.modules, n);
+                                            say(c.getSource(), ok ? "Config loaded: " + n : "Config not found");
+                                            return 1;
+                                        })))
+                        .then(literal("delete")
+                                .then(argument("name", StringArgumentType.word())
+                                        .executes(c -> {
+                                            String n = Config.cleanName(StringArgumentType.getString(c, "name"));
+                                            boolean ok = n != null && Config.delete(n);
+                                            say(c.getSource(), ok ? "Config deleted: " + n : "Config not found");
+                                            return 1;
+                                        })))
+                        .then(literal("list")
+                                .executes(c -> {
+                                    var names = Config.names();
+                                    say(c.getSource(), names.isEmpty() ? "No configs saved yet"
+                                            : "Configs: " + String.join(", ", names));
+                                    return 1;
+                                })))
                 .then(literal("friend")
                         .then(literal("add")
                                 .then(argument("name", StringArgumentType.word())

@@ -48,6 +48,11 @@ public class BlockEsp extends EspModule {
 
     // ---- custom block list (used by the /aurora blocks commands)
 
+    /** True when the Target setting is Custom, meaning the custom list is what gets highlighted. */
+    public boolean customMode() {
+        return target.is("Custom");
+    }
+
     public List<String> customBlocks() {
         return blocks.get();
     }

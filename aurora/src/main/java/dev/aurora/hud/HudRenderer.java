@@ -4,7 +4,10 @@ import dev.aurora.AuroraClient;
 import dev.aurora.gui.Colors;
 import dev.aurora.gui.Palette;
 import dev.aurora.module.Module;
+import dev.aurora.module.impl.Atmosphere;
+import dev.aurora.module.impl.CustomHotbar;
 import dev.aurora.module.impl.CrosshairModule;
+import dev.aurora.module.impl.Equipment;
 import dev.aurora.module.impl.Friends;
 import dev.aurora.module.impl.Keystrokes;
 import dev.aurora.module.impl.HudModule;
@@ -16,6 +19,7 @@ import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.client.render.RenderTickCounter;
+import net.minecraft.item.ItemStack;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
@@ -25,6 +29,7 @@ import net.minecraft.util.math.ChunkPos;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -84,6 +89,11 @@ public final class HudRenderer {
         boolean neon = "Neon Pink".equals(ui.theme());
         int accent = neon ? 0xFFFF2E88 : Palette.of(ui.accent());
 
+        Atmosphere atmosphere = AuroraClient.modules.get(Atmosphere.class);
+        if (atmosphere.isEnabled()) {
+            drawAtmosphere(ctx, mc, atmosphere, neon ? 0xFFFF2E88 : 0xFFA06BFF);
+        }
+
         HudModule hud = AuroraClient.modules.get(HudModule.class);
         hud.infoElement.shown = hud.isEnabled();
         hud.listElement.shown = hud.isEnabled() && hud.showModuleList();
@@ -115,6 +125,17 @@ public final class HudRenderer {
         CrosshairModule crosshair = AuroraClient.modules.get(CrosshairModule.class);
         if (crosshair.isEnabled()) {
             drawCrosshair(ctx, mc, crosshair, neon ? 0xFFFF2E88 : Palette.of(crosshair.colorName()));
+        }
+
+        CustomHotbar hotbar = AuroraClient.modules.get(CustomHotbar.class);
+        if (hotbar.isEnabled()) {
+            drawHotbar(ctx, mc, hotbar, ui.theme());
+        }
+
+        Equipment equipment = AuroraClient.modules.get(Equipment.class);
+        equipment.element.shown = equipment.isEnabled();
+        if (equipment.isEnabled()) {
+            drawEquipment(ctx, mc, equipment, ui.theme());
         }
 
         if (ui.showChunkGrid()) {
@@ -156,7 +177,7 @@ public final class HudRenderer {
 
         List<String> top = new ArrayList<>();
         if (hud.showBrand()) {
-            top.add("AURORA+");
+            top.add("AURORA");
         }
         if (hud.showFps()) {
             top.add(mc.getCurrentFps() + " FPS");
@@ -167,7 +188,7 @@ public final class HudRenderer {
 
         List<String> bottom = new ArrayList<>();
         if (hud.showCoords()) {
-            bottom.add(String.format(Locale.ROOT, "%d %d %d",
+            bottom.add(String.format(Locale.ROOT, "%d %d %d XYZ",
                     (int) Math.floor(mc.player.getX()),
                     (int) Math.floor(mc.player.getY()),
                     (int) Math.floor(mc.player.getZ())));
@@ -198,7 +219,7 @@ public final class HudRenderer {
             int px = x;
             for (String s : row) {
                 int w = tr.getWidth(s) + 10;
-                pill(ctx, tr, px, y, w, s, s.equals("AURORA+") ? accent : textColor, opacity, theme);
+                pill(ctx, tr, px, y, w, s, s.equals("AURORA") ? accent : textColor, opacity, theme);
                 px += w + 3;
             }
             y += 16;
@@ -278,6 +299,109 @@ public final class HudRenderer {
         int color = frac > 0.5 ? 0xFF5CE07B : (frac > 0.25 ? 0xFFFFC83D : 0xFFFF4A4A);
         ctx.fill(x + 7, y + 24, x + 7 + barW, y + 27, 0xFF2A2F3F);
         ctx.fill(x + 7, y + 24, x + 7 + (int) Math.round(barW * frac), y + 27, color);
+    }
+
+    // ---------------------------------------------------------------- hotbar
+
+    private static void drawHotbar(DrawContext ctx, MinecraftClient mc, CustomHotbar hb, String theme) {
+        if (mc.player == null) {
+            return;
+        }
+        int sw = mc.getWindow().getScaledWidth();
+        int sh = mc.getWindow().getScaledHeight();
+        boolean neon = "Neon Pink".equals(theme);
+        int[] colors = getThemeColors(theme);
+        int selectedColor = neon ? 0xFFFF2E88 : 0xFFC9A7FF; // light purple, pink in Neon Pink
+        int alpha = hb.alpha();
+        int selected = mc.player.getInventory().getSelectedSlot();
+
+        int total = 9 * 22 + 8 * 2;
+        int x0 = (sw - total) / 2;
+        int y0 = sh - 22 - 4;
+        for (int i = 0; i < 9; i++) {
+            int x = x0 + i * 24;
+            boolean sel = i == selected;
+            ctx.fill(x, y0, x + 22, y0 + 22, (alpha << 24) | ((sel ? selectedColor : colors[0]) & 0xFFFFFF));
+            ctx.fill(x + 1, y0 + 1, x + 21, y0 + 21, (alpha << 24) | (colors[1] & 0xFFFFFF));
+            ItemStack stack = mc.player.getInventory().getStack(i);
+            if (!stack.isEmpty()) {
+                ctx.drawItem(stack, x + 3, y0 + 3);
+                ctx.drawStackOverlay(mc.textRenderer, stack, x + 3, y0 + 3);
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- atmosphere
+
+    private static void drawAtmosphere(DrawContext ctx, MinecraftClient mc, Atmosphere atm, int color) {
+        int w = mc.getWindow().getScaledWidth();
+        int h = mc.getWindow().getScaledHeight();
+        int rgb = color & 0xFFFFFF;
+
+        // Sky glow: fades out from the top of the screen.
+        int bands = 24;
+        int bandH = Math.max(1, (int) (h * 0.6) / bands);
+        int strength = atm.tint();
+        for (int i = 0; i < bands; i++) {
+            double t = 1.0 - (double) i / bands;
+            int a = (int) (strength * t * t);
+            if (a > 0) {
+                int y = i * bandH;
+                ctx.fill(0, y, w, y + bandH, (a << 24) | rgb);
+            }
+        }
+
+        // Aurora band: two soft wavy lines that drift over time.
+        if (atm.aurora()) {
+            double phase = System.currentTimeMillis() / 900.0;
+            int base = (int) (h * 0.22);
+            for (int layer = 0; layer < 2; layer++) {
+                int a = layer == 0 ? 70 : 40;
+                for (int x = 0; x < w; x += 6) {
+                    double y = base + layer * 14 + Math.sin(x / 90.0 + phase + layer) * 14;
+                    ctx.fill(x, (int) y, x + 6, (int) y + 3, (a << 24) | 0xC9A7FF);
+                }
+            }
+        }
+
+        // Screen outline.
+        if (atm.outline()) {
+            int c = 0xFF000000 | rgb;
+            ctx.fill(0, 0, w, 2, c);
+            ctx.fill(0, h - 2, w, h, c);
+            ctx.fill(0, 0, 2, h, c);
+            ctx.fill(w - 2, 0, w, h, c);
+        }
+    }
+
+    // ---------------------------------------------------------------- equipment
+
+    private static void slot(DrawContext ctx, int x, int y, ItemStack stack, int[] colors) {
+        ctx.fill(x, y, x + 22, y + 22, 0xFF000000 | (colors[0] & 0xFFFFFF));
+        ctx.fill(x + 1, y + 1, x + 21, y + 21, 0xFF000000 | (colors[1] & 0xFFFFFF));
+        if (!stack.isEmpty()) {
+            ctx.drawItem(stack, x + 3, y + 3);
+        }
+    }
+
+    private static void drawEquipment(DrawContext ctx, MinecraftClient mc, Equipment eq, String theme) {
+        HudLayout.Element el = eq.element;
+        int x = el.x(mc.getWindow().getScaledWidth());
+        int y = el.y(mc.getWindow().getScaledHeight());
+        int[] colors = getThemeColors(theme);
+
+        List<ItemStack> armor = new ArrayList<>();
+        for (ItemStack s : mc.player.getArmorItems()) {
+            armor.add(s);
+        }
+        Collections.reverse(armor); // helmet first, boots last
+
+        slot(ctx, x, y, mc.player.getOffHandStack(), colors);
+        slot(ctx, x + 25, y, mc.player.getMainHandStack(), colors);
+        for (int i = 0; i < 4; i++) {
+            ItemStack s = i < armor.size() ? armor.get(i) : ItemStack.EMPTY;
+            slot(ctx, x + 56 + i * 25, y, s, colors);
+        }
     }
 
     // ---------------------------------------------------------------- keystrokes

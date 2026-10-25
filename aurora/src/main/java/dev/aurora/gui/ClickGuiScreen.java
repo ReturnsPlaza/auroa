@@ -6,6 +6,7 @@ import dev.aurora.Keys;
 import dev.aurora.hud.HudLayout;
 import dev.aurora.module.Category;
 import dev.aurora.module.Module;
+import dev.aurora.module.impl.BlockEsp;
 import dev.aurora.module.impl.InterfaceModule;
 import dev.aurora.setting.BooleanSetting;
 import dev.aurora.setting.ModeSetting;
@@ -49,14 +50,15 @@ public class ClickGuiScreen extends Screen {
     private static final int SET_BOOL = 13;
     private static final int SET_NUM = 19;
 
-    private static final int MARK = 0xFFFFC83D;
-    private static final int PANEL_BG = 0xD00D0F13;
-    private static final int HEADER_BG = 0xE8101319;
+    // Non-final so the theme can swap them each frame (see render).
+    private int MARK = 0xFFFFC83D;
+    private int PANEL_BG = 0xD00D0F13;
+    private int HEADER_BG = 0xE8101319;
     private static final int ROW_HOVER = 0x28FFFFFF;
     private static final int TEXT = 0xFFE8EAEE;
     private static final int DIM = 0xFF8C919B;
     private static final int TRACK_OFF = 0xFF3A3E47;
-    private static final int ENABLED = 0xFF8FC4FF;
+    private int ENABLED = 0xFF8FC4FF;
 
     private interface Drag {
         void start(double mx, double my);
@@ -123,7 +125,7 @@ public class ClickGuiScreen extends Screen {
     private int accent = 0xFF4C8DFF;
 
     private Module listening;
-    private final boolean[] prevKeys = new boolean[400];
+    private final boolean[] prevKeys = new boolean[Keys.MOUSE_BASE + 8];
 
     private ClickGuiScreen() {
         super(Text.literal("Aurora"));
@@ -300,7 +302,12 @@ public class ClickGuiScreen extends Screen {
     public void render(DrawContext ctx, int mx, int my, float delta) {
         InterfaceModule ui = AuroraClient.modules.get(InterfaceModule.class);
         double speed = ui.speed();
-        accent = Palette.of(ui.accent());
+        boolean neon = "Neon Pink".equals(ui.theme());
+        accent = neon ? 0xFFFF2E88 : Palette.of(ui.accent());
+        MARK = neon ? 0xFFFF2E88 : 0xFFFFC83D;
+        PANEL_BG = neon ? 0xD01A0B1F : 0xD00D0F13;
+        HEADER_BG = neon ? 0xE8240F2B : 0xE8101319;
+        ENABLED = neon ? 0xFFFFB3DA : 0xFF8FC4FF;
 
         updateMouse();
         processInput();
@@ -374,6 +381,9 @@ public class ClickGuiScreen extends Screen {
 
     private static double settingsHeight(Module m) {
         double h = SET_BOOL; // the keybind row
+        if (m instanceof BlockEsp || m instanceof InterfaceModule) {
+            h += SET_BOOL; // the Customize / Configs row
+        }
         for (Setting<?> s : m.settings()) {
             if (s.hidden) {
                 continue;
@@ -542,6 +552,28 @@ public class ClickGuiScreen extends Screen {
                 });
                 y += SET_NUM;
             }
+        }
+
+        // Customize row (Block ESP only): opens the searchable block list.
+        if (m instanceof BlockEsp) {
+            String label = "Customize";
+            text(ctx, "Blocks", x + 10, y + 3, Colors.alpha(DIM, a));
+            text(ctx, label, x + W - 8 - textWidth(label), y + 3, Colors.alpha(accent, a));
+            addHit(x, y, W, SET_BOOL,
+                    () -> MinecraftClient.getInstance().setScreen(new BlockCustomizeScreen(ClickGuiScreen.get())),
+                    null, null);
+            y += SET_BOOL;
+        }
+
+        // Configs row (Aurora+ only): opens the saved config list.
+        if (m instanceof InterfaceModule) {
+            String label = "Open";
+            text(ctx, "Configs", x + 10, y + 3, Colors.alpha(DIM, a));
+            text(ctx, label, x + W - 8 - textWidth(label), y + 3, Colors.alpha(accent, a));
+            addHit(x, y, W, SET_BOOL,
+                    () -> MinecraftClient.getInstance().setScreen(new ConfigScreen(ClickGuiScreen.get())),
+                    null, null);
+            y += SET_BOOL;
         }
 
         // Keybind row. Click it, then press a key. Escape cancels, Backspace or Delete clears.

@@ -12,6 +12,9 @@ public final class Keys {
     private Keys() {
     }
 
+    /** Mouse buttons are stored as MOUSE_BASE + button index, so they never clash with keyboard codes. */
+    public static final int MOUSE_BASE = 1000;
+
     private static final int[] VALID = build();
 
     private static void range(List<Integer> list, int from, int to) {
@@ -33,6 +36,8 @@ public final class Keys {
         range(l, 290, 314);
         range(l, 320, 336);
         range(l, 340, 348);
+        // Middle and side mouse buttons (buttons 2-7). Left and right stay reserved for the menu.
+        range(l, MOUSE_BASE + 2, MOUSE_BASE + 7);
         int[] out = new int[l.size()];
         for (int i = 0; i < out.length; i++) {
             out[i] = l.get(i);
@@ -50,12 +55,18 @@ public final class Keys {
             return false;
         }
         long window = MinecraftClient.getInstance().getWindow().getHandle();
+        if (key >= MOUSE_BASE) {
+            return GLFW.glfwGetMouseButton(window, key - MOUSE_BASE) == GLFW.GLFW_PRESS;
+        }
         return GLFW.glfwGetKey(window, key) == GLFW.GLFW_PRESS;
     }
 
     public static String name(int key) {
         if (key < 0) {
             return "NONE";
+        }
+        if (key >= MOUSE_BASE) {
+            return "MOUSE " + (key - MOUSE_BASE + 1);
         }
         switch (key) {
             case GLFW.GLFW_KEY_SPACE:

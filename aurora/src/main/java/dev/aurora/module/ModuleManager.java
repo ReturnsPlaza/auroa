@@ -5,7 +5,10 @@ import dev.aurora.module.impl.AutoEat;
 import dev.aurora.module.impl.AutoLog;
 import dev.aurora.module.impl.AutoMine;
 import dev.aurora.module.impl.AutoTool;
+import dev.aurora.module.impl.Atmosphere;
+import dev.aurora.module.impl.CustomHotbar;
 import dev.aurora.module.impl.BlockEsp;
+import dev.aurora.module.impl.Equipment;
 import dev.aurora.module.impl.CrosshairModule;
 import dev.aurora.module.impl.Keystrokes;
 import dev.aurora.module.impl.EntityEsp;
@@ -52,6 +55,9 @@ public class ModuleManager {
         register(new RadarModule());
         register(new Keystrokes());
         register(new CrosshairModule());
+        register(new Atmosphere());
+        register(new Equipment());
+        register(new CustomHotbar());
         // Client
         register(new InterfaceModule());
         register(new Friends());
