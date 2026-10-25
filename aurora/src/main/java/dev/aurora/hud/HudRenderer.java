@@ -13,7 +13,6 @@ import dev.aurora.module.impl.CustomHotbar;
 import dev.aurora.module.impl.CrosshairModule;
 import dev.aurora.module.impl.Friends;
 import dev.aurora.module.impl.EntityEsp;
-import dev.aurora.module.impl.ArmorHud;
 import dev.aurora.module.impl.Keystrokes;
 import dev.aurora.module.impl.Nametags;
 import dev.aurora.module.impl.HudModule;
@@ -131,11 +130,6 @@ public final class HudRenderer {
             drawEntityTracers(ctx, mc, entityEsp.glowing());
         }
 
-        ArmorHud armor = AuroraClient.modules.get(ArmorHud.class);
-        armor.element.shown = armor.isEnabled();
-        if (armor.isEnabled()) {
-            drawArmor(ctx, mc, armor, ui.theme());
-        }
 
         Keystrokes keys = AuroraClient.modules.get(Keystrokes.class);
         keys.element.shown = keys.isEnabled();
@@ -463,45 +457,6 @@ public final class HudRenderer {
         }
     }
 
-    /** Four worn armour pieces, helmet first, each with its icon, durability bar and remaining uses. */
-    private static void drawArmor(DrawContext ctx, MinecraftClient mc, ArmorHud ah, String theme) {
-        HudLayout.Element el = ah.element;
-        int[] colors = getThemeColors(theme);
-        int w = 112;
-        int rowH = 20;
-        int h = 4 * rowH + 6;
-        el.w = w;
-        el.h = h;
-        int x = el.x(mc.getWindow().getScaledWidth());
-        int y = el.y(mc.getWindow().getScaledHeight());
-        Shapes.roundFill(ctx, x, y, w, h, 8, (230 << 24) | (colors[0] & 0xFFFFFF));
-        Shapes.roundFill(ctx, x + 1, y + 1, w - 2, h - 2, 7, (230 << 24) | (colors[1] & 0xFFFFFF));
-        for (int i = 0; i < 4; i++) {
-            // Armour slots: 3 = helmet, 2 = chestplate, 1 = leggings, 0 = boots.
-            ItemStack stack = mc.player.getInventory().getArmorStack(3 - i);
-            int ry = y + 3 + i * rowH;
-            if (stack.isEmpty()) {
-                Fonts.draw(ctx, "EMPTY", x + 8, ry + 5, (colors[2] & 0xFFFFFF) | 0x80000000, false);
-                continue;
-            }
-            ctx.drawItem(stack, x + 6, ry + 2);
-            if (stack.isDamageable()) {
-                int max = Math.max(1, stack.getMaxDamage());
-                int left = Math.max(0, max - stack.getDamage());
-                double frac = Math.max(0, Math.min(1, left / (double) max));
-                int barX = x + 30;
-                int barW = w - 30 - 34;
-                int fill = (int) Math.round(barW * frac);
-                int c = frac > 0.5 ? 0xFF5CE07B : (frac > 0.25 ? 0xFFFF9A3D : 0xFFFF4A4A);
-                Shapes.roundFill(ctx, barX, ry + 8, barW, 4, 2, 0xFF2A2F3F);
-                if (fill > 0) {
-                    Shapes.roundFill(ctx, barX, ry + 8, fill, 4, 2, c);
-                }
-                String num = String.valueOf(left);
-                Fonts.draw(ctx, num, x + w - 6 - Fonts.width(num), ry + 5, colors[2], false);
-            }
-        }
-    }
 
     // ---------------------------------------------------------------- keystrokes
 
