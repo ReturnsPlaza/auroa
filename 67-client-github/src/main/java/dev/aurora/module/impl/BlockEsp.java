@@ -234,6 +234,6 @@ public class BlockEsp extends EspModule {
     @Override
     protected void onDisable() {
         targets = Collections.emptyList();
-        timer = 0;
+        restartScan();
     }
 }
