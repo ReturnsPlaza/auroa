@@ -41,9 +41,9 @@ public final class HudRenderer {
     private HudRenderer() {
     }
 
-    private static final int PILL_BORDER_DEFAULT = 0xFF2A3150;
-    private static final int PILL_BG_DEFAULT = 0xFF151A2B;
-    private static final int PILL_TEXT_DEFAULT = 0xFFDDE3F5;
+    private static final int PILL_BORDER_DEFAULT = 0xFF2B6F80;
+    private static final int PILL_BG_DEFAULT = 0xFF0B1419;
+    private static final int PILL_TEXT_DEFAULT = 0xFFD8F4FF;
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     private static int tickCount;
@@ -179,7 +179,7 @@ public final class HudRenderer {
     private static void drawInfo(DrawContext ctx, MinecraftClient mc, HudModule hud, int accent, String theme) {
         TextRenderer tr = mc.textRenderer;
 
-        String nameTag = "Aurora";
+        String nameTag = "goon client";
         List<String> top = new ArrayList<>();
         if (hud.showBrand()) {
             top.add(nameTag);
@@ -204,8 +204,8 @@ public final class HudRenderer {
         int x = el.x(mc.getWindow().getScaledWidth());
         int y = el.y(mc.getWindow().getScaledHeight());
         int opacity = hud.opacity();
-        int textColor = "Neon Pink".equals(theme) ? 0xFFFFB3DA : 0xFFD9B8FF;
-        int nameColor = "Neon Pink".equals(theme) ? 0xFFFF2E88 : 0xFFB07CFF;
+        int textColor = "Neon Pink".equals(theme) ? 0xFFFFB3DA : 0xFFCFF6FF;
+        int nameColor = "Neon Pink".equals(theme) ? 0xFFFF2E88 : 0xFF5FD4F0;
         for (List<String> row : List.of(top, bottom)) {
             if (row.isEmpty()) {
                 continue;
@@ -307,8 +307,8 @@ public final class HudRenderer {
         int sw = mc.getWindow().getScaledWidth();
         int sh = mc.getWindow().getScaledHeight();
         boolean neon = "Neon Pink".equals(theme);
-        int lightColor = neon ? 0xFFFF8FCB : 0xFFE0B3FF; // selected slot: light purple, light pink in Neon Pink
-        int rimColor = neon ? 0xFFFF2E88 : 0xFFA06BFF;   // every slot's outline
+        int lightColor = neon ? 0xFFFF8FCB : 0xFF9FEFFF; // selected slot: light purple, light pink in Neon Pink
+        int rimColor = neon ? 0xFFFF2E88 : 0xFF5FD4F0;   // every slot's outline
         int alpha = hb.alpha();
         int selected = mc.player.getInventory().getSelectedSlot();
 
@@ -318,11 +318,11 @@ public final class HudRenderer {
 
         // Aurora aura: layered soft glow around the bar that drifts between purple and teal.
         double t = System.currentTimeMillis() / 1600.0;
-        int auraA = neon ? 0xFFFF2E88 : 0xFFA06BFF;
+        int auraA = neon ? 0xFFFF2E88 : 0xFF5FD4F0;
         int auraB = neon ? 0xFFFFB3DA : 0xFF5CE8D0;
         int drift = Colors.lerp(auraA, auraB, (Math.sin(t) + 1) / 2) & 0xFFFFFF;
         for (int k = 6; k >= 1; k--) {
-            int a = 10 + (7 - k) * 7; // outer layers faint, inner layers brighter
+            int a = 6 + (7 - k) * 4; // outer layers faint, inner layers brighter
             int pad = k * 2;
             Shapes.roundFill(ctx, x0 - 6 - pad, y0 - 6 - pad, total + 12 + pad * 2, 34 + pad * 2, 9 + pad,
                     (a << 24) | drift);
@@ -337,7 +337,7 @@ public final class HudRenderer {
         for (int i = 0; i < 9; i++) {
             int x = x0 + i * 24;
             int slotRim = Colors.lerp(rimColor, auraB, (Math.sin(t * 1.5 + i * 0.7) + 1) / 2 * 0.6) & 0xFFFFFF;
-            Shapes.roundFill(ctx, x, y0, 22, 22, 6, (150 << 24) | slotRim);
+            Shapes.roundFill(ctx, x, y0, 22, 22, 6, (alpha << 24) | 0x0E0A14);
             Shapes.roundFill(ctx, x + 1, y0 + 1, 20, 20, 5, (alpha << 24) | 0x0E0A14);
         }
 
@@ -382,7 +382,7 @@ public final class HudRenderer {
                 continue;
             }
             p.toScreen(cam, sc);
-            EspRenderer.line(ctx, p.width / 2.0, p.height, sc[0], sc[1], 0xFFB07CFF, 2);
+            EspRenderer.line(ctx, p.width / 2.0, p.height, sc[0], sc[1], 0xFF5FD4F0, 2);
         }
     }
 
@@ -483,7 +483,7 @@ public final class HudRenderer {
         int cell = 18;
         int gx = 6;
         int gy = mc.getWindow().getScaledHeight() - 6 - 3 * cell - 14;
-        int here = neon ? 0xFFFF2E88 : 0xFFA06BFF;
+        int here = neon ? 0xFFFF2E88 : 0xFF5FD4F0;
 
         ctx.fill(gx - 2, gy - 2, gx + 3 * cell + 2, gy + 3 * cell + 2, colors[0]);
         ctx.fill(gx - 1, gy - 1, gx + 3 * cell + 1, gy + 3 * cell + 1, colors[1]);
@@ -502,7 +502,7 @@ public final class HudRenderer {
         int dotX = gx + cell + 1 + (int) Math.round((lx / 15.0) * (inner - 3));
         int dotY = gy + cell + 1 + (int) Math.round((lz / 15.0) * (inner - 3));
         Shapes.roundFill(ctx, dotX - 1, dotY - 1, 5, 5, 2, 0xFFFFFFFF);
-        Shapes.roundFill(ctx, dotX, dotY, 3, 3, 1, neon ? 0xFFFF2E88 : 0xFFA06BFF);
+        Shapes.roundFill(ctx, dotX, dotY, 3, 3, 1, neon ? 0xFFFF2E88 : 0xFF5FD4F0);
         String label = "CHUNK " + cp.x + ", " + cp.z + "  LOCAL " + lx + ", " + lz;
         Fonts.draw(ctx, label, gx, gy - 12, colors[2], true);
     }

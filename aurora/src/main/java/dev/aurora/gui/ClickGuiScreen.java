@@ -53,14 +53,14 @@ public class ClickGuiScreen extends Screen {
     private static final int SET_NUM = 19;
 
     // Non-final so the theme can swap them each frame (see render).
-    private int MARK = 0xFFA06BFF;
-    private int PANEL_BG = 0xD00D0F13;
-    private int HEADER_BG = 0xE8101319;
+    private int MARK = 0xFF5FD4F0;
+    private int PANEL_BG = 0xD00A1217;
+    private int HEADER_BG = 0xE80E1C23;
     private static final int ROW_HOVER = 0x28FFFFFF;
     private static final int TEXT = 0xFFE8EAEE;
     private static final int DIM = 0xFF8C919B;
     private static final int TRACK_OFF = 0xFF3A3E47;
-    private int ENABLED = 0xFFD9B8FF;
+    private int ENABLED = 0xFFCFF6FF;
 
     private interface Drag {
         void start(double mx, double my);
@@ -124,13 +124,17 @@ public class ClickGuiScreen extends Screen {
     private double mouseY;
     private double clipTop;
     private double clipBottom;
-    private int accent = 0xFFA06BFF;
+    private int accent = 0xFF5FD4F0;
 
     private Module listening;
     private final boolean[] prevKeys = new boolean[Keys.MOUSE_BASE + 8];
 
+    private String search = "";
+    private boolean searchFocused;
+    private final boolean[] searchPrev = new boolean[512];
+
     private ClickGuiScreen() {
-        super(Text.literal("Aurora"));
+        super(Text.literal("goon client"));
         int i = 0;
         for (Category c : Category.values()) {
             panels.add(new Panel(c, i, 24 + i * (W + 10), 28));
@@ -241,10 +245,14 @@ public class ClickGuiScreen extends Screen {
 
         if (listening != null) {
             pollBind();
-        } else if (key && !wasKey) {
+        } else if (key && !wasKey && !searchFocused) {
             closing = true;
         }
+        if (searchFocused) {
+            pollSearch();
+        }
         if (left && !wasLeft) {
+            searchFocused = false;
             press(true);
         }
         if (right && !wasRight) {
@@ -307,10 +315,10 @@ public class ClickGuiScreen extends Screen {
         double speed = ui.speed();
         boolean neon = "Neon Pink".equals(ui.theme());
         accent = neon ? 0xFFFF2E88 : Palette.of(ui.accent());
-        MARK = neon ? 0xFFFF2E88 : 0xFFA06BFF;
-        PANEL_BG = neon ? 0xD01A0B1F : 0xD00D0F13;
-        HEADER_BG = neon ? 0xE8240F2B : 0xE8101319;
-        ENABLED = neon ? 0xFFFFB3DA : 0xFFD9B8FF;
+        MARK = neon ? 0xFFFF2E88 : 0xFF5FD4F0;
+        PANEL_BG = neon ? 0xD01A0B1F : 0xD00A1217;
+        HEADER_BG = neon ? 0xE8240F2B : 0xE80E1C23;
+        ENABLED = neon ? 0xFFFFB3DA : 0xFFCFF6FF;
 
         updateMouse();
         processInput();
@@ -336,9 +344,91 @@ public class ClickGuiScreen extends Screen {
         for (Panel p : new ArrayList<>(panels)) {
             renderPanel(ctx, p, o, speed);
         }
+        renderSearchPanel(ctx, o);
         renderTooltip(ctx, o, speed);
 
         hits = nextHits;
+    }
+
+    /** A module shows when the search box is empty or its name contains the text typed. */
+    private boolean matches(Module m) {
+        return search.isEmpty() || m.name.toLowerCase(Locale.ROOT).contains(search);
+    }
+
+    /** Types into the search box: letters, digits and space. Backspace deletes. */
+    private void pollSearch() {
+        for (int k = 0; k < searchPrev.length; k++) {
+            boolean down = keyDown(k);
+            if (down && !searchPrev[k]) {
+                if (k == GLFW.GLFW_KEY_BACKSPACE) {
+                    if (!search.isEmpty()) {
+                        search = search.substring(0, search.length() - 1);
+                    }
+                } else if (k >= GLFW.GLFW_KEY_A && k <= GLFW.GLFW_KEY_Z) {
+                    search += (char) ('a' + (k - GLFW.GLFW_KEY_A));
+                } else if (k >= GLFW.GLFW_KEY_0 && k <= GLFW.GLFW_KEY_9) {
+                    search += (char) ('0' + (k - GLFW.GLFW_KEY_0));
+                } else if (k == GLFW.GLFW_KEY_SPACE) {
+                    search += ' ';
+                }
+            }
+            searchPrev[k] = down;
+        }
+    }
+
+    /** Panels go back to their first positions, one column per category, across the top. */
+    private void resetLayout() {
+        for (Panel p : panels) {
+            p.x = 24 + p.index * (W + 10);
+            p.y = 28;
+            p.collapsed = false;
+        }
+    }
+
+    /** The Search panel after the category panels: a search box, then Configs, Reset layout and Close. */
+    private void renderSearchPanel(DrawContext ctx, double o) {
+        int x = 24 + Category.values().length * (W + 10);
+        int y = 28;
+        String[] labels = {"Configs", "Reset layout", "Close"};
+        int body = 24 + labels.length * ROW + 4;
+        Shapes.roundFill(ctx, x - 3, y - 3, W + 6, HEADER + body + 6, 13, Colors.alpha(accent, 0.16 * o));
+        Shapes.roundFill(ctx, x - 1, y - 1, W + 2, HEADER + body + 2, 11, Colors.alpha(accent, 0.35 * o));
+        Shapes.roundFill(ctx, x, y, W, HEADER + body, 10, Colors.alpha(PANEL_BG, o));
+        Shapes.roundFill(ctx, x, y, W, HEADER, 10, Colors.alpha(HEADER_BG, o));
+        ctx.fill(x, y + HEADER - 1, x + W, y + HEADER, Colors.alpha(accent, 0.9 * o));
+        Shapes.roundFill(ctx, x + 7, y + 5, 7, 7, 2, Colors.alpha(accent, o));
+        text(ctx, "Search", x + 19, y + 5, Colors.alpha(MARK, o));
+
+        clipTop = y;
+        clipBottom = y + HEADER + body;
+        addHit(x, y, W, HEADER + body, null, null, null);
+
+        // Search box: click it to type. Clicking anywhere else stops typing.
+        int bx = x + 6;
+        int by = y + HEADER + 5;
+        int bw = W - 12;
+        boolean empty = search.isEmpty() && !searchFocused;
+        Shapes.roundFill(ctx, bx, by, bw, 14, 4, Colors.alpha(searchFocused ? accent : TRACK_OFF, o));
+        Shapes.roundFill(ctx, bx + 1, by + 1, bw - 2, 12, 3, Colors.alpha(0xFF0A1217, o));
+        String shown = empty ? "Search modules..." : search + (searchFocused ? "_" : "");
+        text(ctx, shown, bx + 5, by + 3, Colors.alpha(empty ? DIM : TEXT, o));
+        addHit(bx, by, bw, 14, () -> searchFocused = true, null, null);
+
+        Runnable[] actions = {
+                () -> MinecraftClient.getInstance().setScreen(new ConfigScreen(ClickGuiScreen.get())),
+                this::resetLayout,
+                this::close,
+        };
+        int top = by + 14 + 5;
+        for (int i = 0; i < labels.length; i++) {
+            int ry = top + i * ROW;
+            boolean hov = dragging == null && mouseX >= x && mouseX < x + W && mouseY >= ry && mouseY < ry + ROW;
+            if (hov) {
+                ctx.fill(x, ry, x + W, ry + ROW, Colors.alpha(ROW_HOVER, o));
+            }
+            text(ctx, labels[i], x + 7, ry + 3, Colors.alpha(hov ? TEXT : DIM, o));
+            addHit(x, ry, W, ROW, actions[i], null, null);
+        }
     }
 
     private void renderHudHandles(DrawContext ctx, double o) {
@@ -420,7 +510,12 @@ public class ClickGuiScreen extends Screen {
         int y = (int) Math.round(p.ay.update(p.y, speed * 1.6) + slide);
         double c = p.collapse.update(p.collapsed ? 0 : 1, speed);
 
-        List<Module> mods = AuroraClient.modules.in(p.category);
+        List<Module> mods = new ArrayList<>();
+        for (Module mod : AuroraClient.modules.in(p.category)) {
+            if (matches(mod)) {
+                mods.add(mod);
+            }
+        }
         double content = 0;
         for (Module m : mods) {
             content += ROW + settingsHeight(m) * row(m).expand.get();
@@ -430,11 +525,14 @@ public class ClickGuiScreen extends Screen {
         // Body and header.
         // Soft accent glow behind the panel, then the rounded body and header.
         Shapes.roundFill(ctx, x - 3, y - 3, W + 6, HEADER + visible + 6, 13, Colors.alpha(accent, 0.16 * o));
+        Shapes.roundFill(ctx, x - 1, y - 1, W + 2, HEADER + visible + 2, 11, Colors.alpha(accent, 0.35 * o));
         Shapes.roundFill(ctx, x, y, W, HEADER + visible, 10, Colors.alpha(PANEL_BG, o));
         Shapes.roundFill(ctx, x, y, W, HEADER, 10, Colors.alpha(HEADER_BG, o));
         ctx.fill(x, y + HEADER - 1, x + W, y + HEADER, Colors.alpha(accent, 0.9 * o));
-        text(ctx, p.category.display, x + 7, y + 5, Colors.alpha(MARK, o));
-        text(ctx, p.collapsed ? "+" : "-", x + W - 11, y + 5, Colors.alpha(DIM, o));
+        Shapes.roundFill(ctx, x + 7, y + 5, 7, 7, 2, Colors.alpha(accent, o));
+        text(ctx, p.category.display, x + 19, y + 5, Colors.alpha(MARK, o));
+        text(ctx, Integer.toString(AuroraClient.modules.in(p.category).size()), x + W - 27, y + 5, Colors.alpha(DIM, o));
+        text(ctx, p.collapsed ? ">" : "v", x + W - 11, y + 5, Colors.alpha(DIM, o));
 
         // The panel background swallows clicks so things underneath are not hit.
         clipTop = y;

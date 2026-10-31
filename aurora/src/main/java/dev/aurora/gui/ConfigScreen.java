@@ -23,7 +23,7 @@ public class ConfigScreen extends Screen {
     private static final int ROWS = 14;
     private static final int ROW_H = 13;
     private static final int PINK = 0xFFFF2E88;
-    private static final int PURPLE = 0xFFA06BFF;
+    private static final int PURPLE = 0xFF5FD4F0;
     private static final int PANEL = 0xE8100A14;
     private static final int TEXT = 0xFFE8EAEE;
     private static final int DIM = 0xFF8C919B;

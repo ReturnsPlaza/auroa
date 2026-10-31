@@ -18,7 +18,7 @@ public final class Palette {
             case "Green" -> 0xFF5CE07B;
             case "Cyan" -> 0xFF4DEBFF;
             case "White" -> 0xFFFFFFFF;
-            default -> 0xFFA06BFF;
+            default -> 0xFF5FD4F0;
         };
     }
 

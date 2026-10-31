@@ -59,7 +59,7 @@ public final class EspRenderer {
         int drawn = 0;
 
         for (EspTarget t : list) {
-            if (drawn >= 250) {
+            if (drawn >= 120) {
                 break;
             }
             BlockPos pos = t.pos();

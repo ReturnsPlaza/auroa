@@ -28,7 +28,7 @@ public class BlockCustomizeScreen extends Screen {
     private static final int ROWS = 12;
     private static final int ROW_H = 18;
     private static final int PINK = 0xFFFF2E88;
-    private static final int PURPLE = 0xFFA06BFF;
+    private static final int PURPLE = 0xFF5FD4F0;
     private static final int LAVENDER = 0xFFE0B3FF;
     private static final int PANEL = 0xEC100A14;
     private static final int TEXT = 0xFFE8EAEE;

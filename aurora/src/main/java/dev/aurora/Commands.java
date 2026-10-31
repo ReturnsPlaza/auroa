@@ -140,6 +140,6 @@ public final class Commands {
     }
 
     private static void say(FabricClientCommandSource source, String message) {
-        source.sendFeedback(Text.literal("[Aurora] " + message));
+        source.sendFeedback(Text.literal("[goon client] " + message));
     }
 }

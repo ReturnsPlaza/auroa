@@ -15,6 +15,7 @@ import net.minecraft.util.math.BlockPos;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -124,15 +125,30 @@ public class BlockEsp extends EspModule {
                     if (c != 0) {
                         found.add(new EspTarget(pos.toImmutable(), c));
                         if (found.size() >= 1500) {
-                            targets = found;
+                            targets = nearest(found, origin);
                             return;
                         }
                     }
                 }
             }
         }
-        targets = found;
+        targets = nearest(found, origin);
     }
+
+    /** Keeps only the closest blocks, so the outline renderer never draws more than it can run smoothly. */
+    private static List<EspTarget> nearest(List<EspTarget> found, BlockPos origin) {
+        found.sort(Comparator.comparingInt(t -> dist2(t.pos(), origin)));
+        return found.size() > MAX_BOXES ? new ArrayList<>(found.subList(0, MAX_BOXES)) : found;
+    }
+
+    private static int dist2(BlockPos a, BlockPos b) {
+        int dx = a.getX() - b.getX();
+        int dy = a.getY() - b.getY();
+        int dz = a.getZ() - b.getZ();
+        return dx * dx + dy * dy + dz * dz;
+    }
+
+    public static final int MAX_BOXES = 120;
 
     private int colorOf(BlockState s, Set<Block> custom) {
         int natural = naturalColor(s, custom);

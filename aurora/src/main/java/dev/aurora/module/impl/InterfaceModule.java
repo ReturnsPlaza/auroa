@@ -9,7 +9,7 @@ import dev.aurora.setting.NumberSetting;
 
 public class InterfaceModule extends Module {
     private final ModeSetting theme = add(new ModeSetting("Theme", "Default", Palette.THEMES));
-    private final ModeSetting accent = add(new ModeSetting("Accent", "Purple", Palette.NAMES));
+    private final ModeSetting accent = add(new ModeSetting("Accent", "Cyan", Palette.NAMES));
     private final NumberSetting speed = add(new NumberSetting("Animation speed", 14, 4, 30, 1));
     private final BooleanSetting dim = add(new BooleanSetting("Dim background", true));
     private final BooleanSetting chunkGrid = add(new BooleanSetting("Chunk grid", true));

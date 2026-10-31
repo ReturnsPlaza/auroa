@@ -59,7 +59,7 @@ public class GamemodeAlert extends Module {
             String line = label(before) + " -> " + label(now);
             Alerts.push(name, line, entry.getSkinTextures(), seconds.asInt());
             if (chat.on()) {
-                mc.player.sendMessage(Text.literal("[Aurora] " + name + " changed gamemode: " + line), false);
+                mc.player.sendMessage(Text.literal("[goon client] " + name + " changed gamemode: " + line), false);
             }
         }
         primed = true;

@@ -20,7 +20,7 @@ public class AutoLog extends Module {
         }
         if (mc.player.getHealth() <= health.asInt()) {
             setEnabled(false);
-            mc.getNetworkHandler().getConnection().disconnect(Text.literal("[Aurora] Auto Log: health was low"));
+            mc.getNetworkHandler().getConnection().disconnect(Text.literal("[goon client] Auto Log: health was low"));
         }
     }
 }
