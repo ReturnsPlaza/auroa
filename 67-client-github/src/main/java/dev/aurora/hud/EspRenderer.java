@@ -2,6 +2,7 @@ package dev.aurora.hud;
 
 import dev.aurora.AuroraClient;
 import dev.aurora.module.impl.BlockEsp;
+import dev.aurora.module.impl.AmethystChunkFinder;
 import dev.aurora.module.impl.EspModule;
 import dev.aurora.module.impl.StorageEsp;
 import net.minecraft.client.MinecraftClient;
@@ -32,7 +33,8 @@ public final class EspRenderer {
     public static void render(DrawContext ctx, MinecraftClient mc) {
         StorageEsp storage = AuroraClient.modules.get(StorageEsp.class);
         BlockEsp blocks = AuroraClient.modules.get(BlockEsp.class);
-        if (!storage.isEnabled() && !blocks.isEnabled()) {
+        AmethystChunkFinder amethyst = AuroraClient.modules.get(AmethystChunkFinder.class);
+        if (!storage.isEnabled() && !blocks.isEnabled() && !amethyst.isEnabled()) {
             return;
         }
         Projector p = new Projector(mc);
@@ -41,6 +43,9 @@ public final class EspRenderer {
         }
         if (storage.isEnabled()) {
             drawModule(ctx, p, storage);
+        }
+        if (amethyst.isEnabled()) {
+            drawModule(ctx, p, amethyst);
         }
     }
 
@@ -59,7 +64,7 @@ public final class EspRenderer {
         int drawn = 0;
 
         for (EspTarget t : list) {
-            if (drawn >= 120) {
+            if (drawn >= 36) {
                 break;
             }
             BlockPos pos = t.pos();
@@ -295,3 +300,4 @@ public final class EspRenderer {
         }
     }
 }
+
