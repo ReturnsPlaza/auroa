@@ -12,9 +12,11 @@ import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.ChestBlockEntity;
 import net.minecraft.block.entity.EnchantingTableBlockEntity;
 import net.minecraft.block.entity.EnderChestBlockEntity;
+import net.minecraft.block.entity.DropperBlockEntity;
 import net.minecraft.block.entity.MobSpawnerBlockEntity;
 import net.minecraft.block.entity.ShulkerBoxBlockEntity;
 import net.minecraft.block.entity.TrappedChestBlockEntity;
+import net.minecraft.block.entity.TrialSpawnerBlockEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.world.chunk.ChunkSection;
@@ -34,6 +36,8 @@ public class StorageEsp extends EspModule {
     private final BooleanSetting furnaces = add(new BooleanSetting("Furnaces", true));
     private final BooleanSetting barrels = add(new BooleanSetting("Barrels", true));
     private final BooleanSetting enchantingTables = add(new BooleanSetting("Enchanting tables", true));
+    private final BooleanSetting droppers = add(new BooleanSetting("Droppers", true));
+    private final BooleanSetting trialSpawners = add(new BooleanSetting("Trial spawners", true));
     private final BooleanSetting pistons = add(new BooleanSetting("Pistons", false));
     private final NumberSetting chunks = add(new NumberSetting("Chunks", 3, 2, 8, 1));
 
@@ -143,6 +147,12 @@ public class StorageEsp extends EspModule {
         }
         if (be instanceof MobSpawnerBlockEntity) {
             return spawners.on() ? 0xFFFF4DFF : 0;
+        }
+        if (be instanceof TrialSpawnerBlockEntity) {
+            return trialSpawners.on() ? 0xFFFF80E1 : 0;
+        }
+        if (be instanceof DropperBlockEntity) {
+            return droppers.on() ? 0xFF6DDAC5 : 0;
         }
         if (be instanceof AbstractFurnaceBlockEntity) {
             return furnaces.on() ? 0xFFBFC5CC : 0;
