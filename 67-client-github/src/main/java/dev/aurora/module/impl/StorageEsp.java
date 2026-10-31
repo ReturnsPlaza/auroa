@@ -22,6 +22,7 @@ import net.minecraft.world.chunk.WorldChunk;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 /** Outlines containers and other storage-type blocks through walls. */
@@ -34,7 +35,7 @@ public class StorageEsp extends EspModule {
     private final BooleanSetting barrels = add(new BooleanSetting("Barrels", true));
     private final BooleanSetting enchantingTables = add(new BooleanSetting("Enchanting tables", true));
     private final BooleanSetting pistons = add(new BooleanSetting("Pistons", false));
-    private final NumberSetting chunks = add(new NumberSetting("Chunks", 6, 2, 12, 1));
+    private final NumberSetting chunks = add(new NumberSetting("Chunks", 3, 2, 8, 1));
 
     private volatile List<EspTarget> targets = Collections.emptyList();
     private int timer;
@@ -56,7 +57,7 @@ public class StorageEsp extends EspModule {
         if (timer-- > 0) {
             return;
         }
-        timer = 10;
+        timer = 20;
 
         List<EspTarget> found = new ArrayList<>();
         ChunkPos center = mc.player.getChunkPos();
@@ -78,8 +79,22 @@ public class StorageEsp extends EspModule {
                 }
             }
         }
-        targets = found;
+        if (found.size() > MAX_BOXES) {
+            BlockPos playerPos = mc.player.getBlockPos();
+            found.sort(Comparator.comparingInt(t -> distanceSquared(t.pos(), playerPos)));
+            found = new ArrayList<>(found.subList(0, MAX_BOXES));
+        }
+        targets = List.copyOf(found);
     }
+
+    private static int distanceSquared(BlockPos a, BlockPos b) {
+        int dx = a.getX() - b.getX();
+        int dy = a.getY() - b.getY();
+        int dz = a.getZ() - b.getZ();
+        return dx * dx + dy * dy + dz * dz;
+    }
+
+    private static final int MAX_BOXES = 36;
 
     private void scanPistons(WorldChunk chunk, List<EspTarget> found) {
         ChunkSection[] sections = chunk.getSectionArray();
@@ -144,3 +159,4 @@ public class StorageEsp extends EspModule {
         timer = 0;
     }
 }
+
