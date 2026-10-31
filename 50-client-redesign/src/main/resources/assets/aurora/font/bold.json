@@ -1,0 +1,14 @@
+{
+  "providers": [
+    {
+      "type": "ttf",
+      "file": "aurora:segoe_bold.ttf",
+      "shift": [
+        0.0,
+        0.0
+      ],
+      "size": 10.0,
+      "oversample": 8.0
+    }
+  ]
+}
