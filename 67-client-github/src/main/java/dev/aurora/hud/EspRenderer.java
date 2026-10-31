@@ -5,13 +5,8 @@ import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.pipeline.BlendFunction;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.DepthTestFunction;
-import com.mojang.blaze3d.shaders.UniformType;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.BufferBuilder;
-import com.mojang.blaze3d.vertex.ByteBufferBuilder;
-import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import dev.aurora.AuroraClient;
 import dev.aurora.module.impl.AmethystChunkFinder;
@@ -22,7 +17,13 @@ import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.render.MappableRingBuffer;
+import net.minecraft.client.gl.MappableRingBuffer;
+import net.minecraft.client.gl.RenderPipelines;
+import net.minecraft.client.gl.UniformType;
+import net.minecraft.client.render.BufferBuilder;
+import net.minecraft.client.render.BuiltBuffer;
+import net.minecraft.client.render.VertexFormats;
+import net.minecraft.client.util.BufferAllocator;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
@@ -61,8 +62,8 @@ public final class EspRenderer {
                 .withFragmentShader("core/position_color")
                 .withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
                 .withUniform("Projection", UniformType.UNIFORM_BUFFER)
-                .withVertexFormat(lines ? DefaultVertexFormat.POSITION_COLOR_NORMAL_LINE_WIDTH
-                        : DefaultVertexFormat.POSITION_COLOR,
+                .withVertexFormat(lines ? VertexFormats.POSITION_COLOR_NORMAL_LINE_WIDTH
+                        : VertexFormats.POSITION_COLOR,
                         lines ? VertexFormat.DrawMode.LINES : VertexFormat.DrawMode.QUADS)
                 .withBlend(BlendFunction.TRANSLUCENT)
                 .withCull(!lines)
@@ -108,7 +109,6 @@ public final class EspRenderer {
             Vec3d center = Vec3d.ofCenter(pos);
             if (center.squaredDistanceTo(camera) > maxSq) continue;
             Box worldBox = new Box(pos).expand(0.002);
-            if (!context.frustum().isVisible(worldBox)) continue;
             Box box = worldBox.offset(-camera.x, -camera.y, -camera.z);
 
             int rgb = target.color() & 0xFFFFFF;
@@ -183,7 +183,7 @@ public final class EspRenderer {
     /** Reusable CPU allocator and rotating GPU vertex buffer, as in Donut Client's renderer. */
     private static final class Batch {
         private final RenderPipeline pipeline;
-        private final ByteBufferBuilder allocator = new ByteBufferBuilder(64 * 1024);
+        private final BufferAllocator allocator = new BufferAllocator(64 * 1024);
         private BufferBuilder builder;
         private MappableRingBuffer vertices;
 
@@ -197,33 +197,27 @@ public final class EspRenderer {
 
         private void flush() {
             if (builder == null) return;
-            MeshData mesh = builder.buildOrThrow();
+            BuiltBuffer mesh = builder.end();
             builder = null;
+            if (mesh == null) return;
             try (mesh) {
-                int bytes = mesh.vertexBuffer().remaining();
+                int bytes = mesh.getBuffer().remaining();
                 if (vertices == null || vertices.size() < bytes) {
                     if (vertices != null) vertices.close();
                     vertices = new MappableRingBuffer(() -> "67 Client ESP", GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_MAP_WRITE, bytes);
                 }
                 try (GpuBuffer.MappedView mapped = RenderSystem.getDevice().createCommandEncoder()
                         .mapBuffer(vertices.currentBuffer().slice(0, bytes), false, true)) {
-                    MemoryUtil.memCopy(mesh.vertexBuffer(), mapped.data());
+                    MemoryUtil.memCopy(mesh.getBuffer(), mapped.data());
                 }
 
-                GpuBuffer indices;
-                VertexFormat.IndexType indexType;
-                if (pipeline.getVertexFormatMode() == VertexFormat.DrawMode.QUADS) {
-                    mesh.sortQuads(allocator, RenderSystem.getProjectionType().vertexSorting());
-                    indices = pipeline.getVertexFormat().uploadImmediateIndexBuffer(mesh.indexBuffer());
-                    indexType = mesh.drawState().indexType();
-                } else {
-                    RenderSystem.AutoStorageIndexBuffer sequential = RenderSystem.getSequentialBuffer(pipeline.getVertexFormatMode());
-                    indices = sequential.getBuffer(mesh.drawState().indexCount());
-                    indexType = sequential.type();
-                }
+                var draw = mesh.getDrawParameters();
+                var sequential = RenderSystem.getSequentialBuffer(pipeline.getVertexFormatMode());
+                GpuBuffer indices = sequential.getBuffer(draw.indexCount());
+                VertexFormat.IndexType indexType = sequential.type();
 
                 GpuBufferSlice transform = RenderSystem.getDynamicUniforms()
-                        .writeTransform(RenderSystem.getModelViewMatrix(), WHITE, ZERO, IDENTITY);
+                        .write(RenderSystem.getModelViewMatrix(), WHITE, ZERO, IDENTITY);
                 var framebuffer = MinecraftClient.getInstance().getFramebuffer();
                 try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
                         () -> "67 Client ESP", framebuffer.getColorAttachmentView(), OptionalInt.empty(),
@@ -233,7 +227,7 @@ public final class EspRenderer {
                     pass.setUniform("DynamicTransforms", transform);
                     pass.setVertexBuffer(0, vertices.currentBuffer());
                     pass.setIndexBuffer(indices, indexType);
-                    pass.drawIndexed(0, 0, mesh.drawState().indexCount(), 1);
+                    pass.drawIndexed(0, 0, draw.indexCount(), 1);
                 }
                 vertices.rotate();
             }
