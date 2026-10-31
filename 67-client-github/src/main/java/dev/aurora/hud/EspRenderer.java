@@ -88,7 +88,7 @@ public final class EspRenderer {
         AmethystChunkFinder amethyst = AuroraClient.modules.get(AmethystChunkFinder.class);
         if (!storage.isEnabled() && !blocks.isEnabled() && !amethyst.isEnabled()) return;
 
-        Vec3d camera = context.camera().getPos();
+        Vec3d camera = context.worldState().cameraRenderState.pos;
         MatrixStack.Entry pose = context.matrices().peek();
         if (blocks.isEnabled()) drawModule(context, pose, camera, blocks);
         if (storage.isEnabled()) drawModule(context, pose, camera, storage);
