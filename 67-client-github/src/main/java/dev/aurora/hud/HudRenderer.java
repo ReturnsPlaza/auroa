@@ -86,8 +86,6 @@ public final class HudRenderer {
             return;
         }
 
-        AtmosphereRenderer.render(ctx, mc.getWindow().getScaledWidth(), mc.getWindow().getScaledHeight());
-
         EspRenderer.render(ctx, mc);
 
         InterfaceModule ui = AuroraClient.modules.get(InterfaceModule.class);
@@ -319,6 +317,16 @@ public final class HudRenderer {
         Shapes.roundFill(ctx, x0 - 4, y0 - 3, total + 8, 24, 7, ((alpha * 3 / 4) << 24) | 0x52D6F2);
         Shapes.roundFill(ctx, x0 - 3, y0 - 2, total + 6, 22, 6, (alpha << 24) | 0x0B1720);
         Shapes.roundFill(ctx, x0 - 1, y0 - 1, total + 2, 1, 1, ((alpha / 4) << 24) | 0xFFFFFF);
+
+        // Dedicated offhand slot, positioned to the left of the nine inventory slots.
+        int offX = x0 - 26;
+        Shapes.roundFill(ctx, offX - 1, y0 - 3, 24, 24, 7, ((alpha * 3 / 4) << 24) | 0x52D6F2);
+        Shapes.roundFill(ctx, offX, y0 - 2, 22, 22, 6, (alpha << 24) | 0x0B1720);
+        ItemStack offhand = mc.player.getOffHandStack();
+        if (!offhand.isEmpty()) {
+            ctx.drawItem(offhand, offX + 3, y0 + 1);
+            ctx.drawStackOverlay(mc.textRenderer, offhand, offX + 3, y0 + 1);
+        }
 
         double pos = hotbarSlot.update(selected, 18);
         int hx = x0 + (int) Math.round(pos * step);
@@ -602,3 +610,4 @@ public final class HudRenderer {
         }
     }
 }
+
