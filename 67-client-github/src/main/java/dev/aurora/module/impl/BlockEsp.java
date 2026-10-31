@@ -27,11 +27,11 @@ import java.util.Set;
  * /aurora blocks add minecraft:chest
  */
 public class BlockEsp extends EspModule {
-    private final ModeSetting target = add(new ModeSetting("Target", "Ores",
+    private final ModeSetting target = add(new ModeSetting("Target", "Diamond",
             "Ores", "Diamond", "Debris", "Spawners", "Custom"));
     private final ModeSetting color = add(new ModeSetting("Color", "Purple",
             concat("Auto", Palette.NAMES)));
-    private final NumberSetting range = add(new NumberSetting("Range", 14, 6, 28, 2));
+    private final NumberSetting range = add(new NumberSetting("Range", 10, 6, 16, 2));
     private final ListSetting blocks = addHidden(new ListSetting("blocks"));
 
     private volatile List<EspTarget> targets = Collections.emptyList();
@@ -43,7 +43,8 @@ public class BlockEsp extends EspModule {
     private int refreshDelay;
     private Set<Block> scanCustom = Set.of();
     private final List<EspTarget> scanFound = new ArrayList<>();
-    private static final int BLOCKS_PER_TICK = 4096;
+    // Spread world reads across more ticks to avoid large scan spikes.
+    private static final int BLOCKS_PER_TICK = 768;
 
     public BlockEsp() {
         super("Block ESP", "Outlines ores or any blocks you choose through walls", Category.WORLD);
@@ -158,7 +159,7 @@ public class BlockEsp extends EspModule {
         scanFound.clear();
     }
 
-    /** Keeps only the closest blocks, so the outline renderer never draws more than it can run smoothly. */
+    /** Keeps only nearby targets so outline rendering stays light and readable. */
     private static List<EspTarget> nearest(List<EspTarget> found, BlockPos origin) {
         found.sort(Comparator.comparingInt(t -> dist2(t.pos(), origin)));
         return found.size() > MAX_BOXES ? new ArrayList<>(found.subList(0, MAX_BOXES)) : new ArrayList<>(found);
@@ -171,7 +172,7 @@ public class BlockEsp extends EspModule {
         return dx * dx + dy * dy + dz * dz;
     }
 
-    public static final int MAX_BOXES = 120;
+    public static final int MAX_BOXES = 36;
 
     private int colorOf(BlockState s, Set<Block> custom) {
         int natural = naturalColor(s, custom);
@@ -234,6 +235,7 @@ public class BlockEsp extends EspModule {
     @Override
     protected void onDisable() {
         targets = Collections.emptyList();
-        timer = 0;
+        restartScan();
     }
 }
+

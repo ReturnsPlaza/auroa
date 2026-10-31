@@ -1,6 +1,7 @@
 package dev.aurora;
 
 import dev.aurora.gui.ClickGuiScreen;
+import dev.aurora.hud.EspRenderer;
 import dev.aurora.hud.HudRenderer;
 import dev.aurora.module.ModuleManager;
 import net.fabricmc.api.ClientModInitializer;
@@ -26,6 +27,7 @@ public class AuroraClient implements ClientModInitializer {
         modules = new ModuleManager();
         modules.registerDefaults();
         Config.load(modules);
+        EspRenderer.register();
 
         // Right Shift opens (and closes) the menu. Change it under Options > Controls > Key Binds.
         openKey = KeyBindingHelper.registerKeyBinding(new KeyBinding(
@@ -59,3 +61,4 @@ public class AuroraClient implements ClientModInitializer {
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> Config.save(modules));
     }
 }
+

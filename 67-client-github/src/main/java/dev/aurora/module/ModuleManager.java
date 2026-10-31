@@ -5,6 +5,7 @@ import dev.aurora.module.impl.AutoEat;
 import dev.aurora.module.impl.AutoLog;
 import dev.aurora.module.impl.AutoMine;
 import dev.aurora.module.impl.AutoTool;
+import dev.aurora.module.impl.AmethystChunkFinder;
 import dev.aurora.module.impl.CustomSky;
 import dev.aurora.module.impl.Nametags;
 import dev.aurora.module.impl.WeatherModule;
@@ -51,6 +52,7 @@ public class ModuleManager {
         register(new EntityEsp());
         register(new StorageEsp());
         register(new BlockEsp());
+        register(new AmethystChunkFinder());
         register(new TargetHud());
         register(new HudModule());
         register(new RadarModule());
@@ -121,3 +123,4 @@ public class ModuleManager {
         }
     }
 }
+
