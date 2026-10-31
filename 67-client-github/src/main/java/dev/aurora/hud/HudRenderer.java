@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 6644)
+Total output lines: 622
+
 package dev.aurora.hud;
 
 import dev.aurora.gui.Fonts;
@@ -9,6 +12,7 @@ import dev.aurora.gui.Anim;
 import dev.aurora.gui.Shapes;
 import dev.aurora.module.Module;
 import dev.aurora.module.impl.CustomHotbar;
+import dev.aurora.module.impl.CustomSky;
 import dev.aurora.module.impl.CrosshairModule;
 import dev.aurora.module.impl.Friends;
 import dev.aurora.module.impl.EntityEsp;
@@ -18,6 +22,7 @@ import dev.aurora.module.impl.HudModule;
 import dev.aurora.module.impl.InterfaceModule;
 import dev.aurora.module.impl.RadarModule;
 import dev.aurora.module.impl.TargetHud;
+import dev.aurora.module.impl.WeatherModule;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
@@ -85,6 +90,13 @@ public final class HudRenderer {
         if (mc.player == null || mc.world == null || mc.options.hudHidden) {
             return;
         }
+
+        CustomSky customSky = AuroraClient.modules.get(CustomSky.class);
+        WeatherModule weather = AuroraClient.modules.get(WeatherModule.class);
+        boolean openSky = mc.world.isSkyVisible(mc.player.getBlockPos()) && mc.player.getPitch() < 45.0f;
+        boolean customRain = mc.world.isRaining() && (!weather.isEnabled() || !weather.clearSky());
+        AtmosphereRenderer.render(ctx, mc.getWindow().getScaledWidth(), mc.getWindow().getScaledHeight(),
+                customSky.isEnabled() && openSky, customRain && openSky);
 
         EspRenderer.render(ctx, mc);
 
@@ -253,148 +265,7 @@ public final class HudRenderer {
         for (String s : names) {
             int pw = Fonts.width(s) + 12;
             int px = x + el.w - pw;
-            ctx.fill(px, y, px + pw, y + 13, (opacity << 24) | (colors[0] & 0xFFFFFF));
-            ctx.fill(px + 1, y + 1, px + pw - 1, y + 12, (opacity << 24) | (colors[1] & 0xFFFFFF));
-            ctx.fill(px + pw - 3, y + 1, px + pw - 1, y + 12, accent);
-            Fonts.draw(ctx, s, px + 5, y + 3, colors[2], false);
-            y += 15;
-        }
-    }
-
-    // ---------------------------------------------------------------- target hud
-
-    private static void drawTarget(DrawContext ctx, MinecraftClient mc, TargetHud t, int opacity, int accent, String theme) {
-        int[] colors = getThemeColors(theme);
-        HudLayout.Element el = t.element;
-        el.w = 110;
-        el.h = 30;
-        if (!(mc.crosshairTarget instanceof EntityHitResult hit) || !(hit.getEntity() instanceof LivingEntity le)) {
-            return;
-        }
-        TextRenderer tr = mc.textRenderer;
-        String name = le.getName().getString().toUpperCase(Locale.ROOT);
-        float hp = le.getHealth();
-        float max = Math.max(1f, le.getMaxHealth());
-        String hpText = String.format(Locale.ROOT, "%.1f / %.1f HP", hp, max);
-
-        int w = Math.max(110, Math.max(Fonts.width(name), Fonts.width(hpText)) + 12);
-        el.w = w;
-        int x = el.x(mc.getWindow().getScaledWidth());
-        int y = el.y(mc.getWindow().getScaledHeight());
-
-        ctx.fill(x, y, x + w, y + 30, colors[0]);
-        ctx.fill(x + 1, y + 1, x + w - 1, y + 29, (opacity << 24) | (colors[1] & 0xFFFFFF));
-        ctx.fill(x + 1, y + 1, x + 3, y + 29, accent);
-        Fonts.draw(ctx, name, x + 7, y + 4, colors[2], false);
-        Fonts.draw(ctx, hpText, x + 7, y + 14, 0xFF8C919B, false);
-
-        int barW = w - 14;
-        double frac = Math.max(0, Math.min(1, hp / max));
-        int color = frac > 0.5 ? 0xFF5CE07B : (frac > 0.25 ? 0xFFFFC83D : 0xFFFF4A4A);
-        ctx.fill(x + 7, y + 24, x + 7 + barW, y + 27, 0xFF2A2F3F);
-        ctx.fill(x + 7, y + 24, x + 7 + (int) Math.round(barW * frac), y + 27, color);
-    }
-
-    // ---------------------------------------------------------------- hotbar
-
-    /** Eases the selected-slot highlight from one slot to the next, so switching slots glides. */
-    private static final Anim hotbarSlot = new Anim(0);
-
-    private static void drawHotbar(DrawContext ctx, MinecraftClient mc, CustomHotbar hb, String theme) {
-        if (mc.player == null) {
-            return;
-        }
-        int sw = mc.getWindow().getScaledWidth();
-        int sh = mc.getWindow().getScaledHeight();
-        int alpha = hb.alpha();
-        int selected = mc.player.getInventory().getSelectedSlot();
-        int step = 22;
-        int total = 9 * step - 2;
-        int x0 = (sw - total) / 2;
-        int y0 = sh - 24;
-        int cyan = 0xFF52D6F2;
-
-        Shapes.roundFill(ctx, x0 - 4, y0 - 3, total + 8, 24, 7, ((alpha * 3 / 4) << 24) | 0x52D6F2);
-        Shapes.roundFill(ctx, x0 - 3, y0 - 2, total + 6, 22, 6, (alpha << 24) | 0x0B1720);
-        Shapes.roundFill(ctx, x0 - 1, y0 - 1, total + 2, 1, 1, ((alpha / 4) << 24) | 0xFFFFFF);
-
-        // Dedicated offhand slot, positioned to the left of the nine inventory slots.
-        int offX = x0 - 26;
-        Shapes.roundFill(ctx, offX - 1, y0 - 3, 24, 24, 7, ((alpha * 3 / 4) << 24) | 0x52D6F2);
-        Shapes.roundFill(ctx, offX, y0 - 2, 22, 22, 6, (alpha << 24) | 0x0B1720);
-        ItemStack offhand = mc.player.getOffHandStack();
-        if (!offhand.isEmpty()) {
-            ctx.drawItem(offhand, offX + 3, y0 + 1);
-            ctx.drawStackOverlay(mc.textRenderer, offhand, offX + 3, y0 + 1);
-        }
-
-        double pos = hotbarSlot.update(selected, 18);
-        int hx = x0 + (int) Math.round(pos * step);
-        Shapes.roundFill(ctx, hx, y0 - 1, 20, 20, 5, cyan);
-        Shapes.roundFill(ctx, hx + 1, y0, 18, 18, 4, (alpha << 24) | 0x102333);
-
-        for (int i = 0; i < 9; i++) {
-            int x = x0 + i * step;
-            ItemStack stack = mc.player.getInventory().getStack(i);
-            if (!stack.isEmpty()) {
-                ctx.drawItem(stack, x + 2, y0 + 1);
-                ctx.drawStackOverlay(mc.textRenderer, stack, x + 2, y0 + 1);
-                if (stack.isDamageable()) {
-                    int max = Math.max(1, stack.getMaxDamage());
-                    double frac = Math.max(0, Math.min(1, (max - stack.getDamage()) / (double) max));
-                    int c = frac > 0.5 ? 0xFF5CE07B : (frac > 0.25 ? 0xFFFF9A3D : 0xFFFF4A4A);
-                    Shapes.roundFill(ctx, x + 2, y0 + 18, 16, 1, 1, 0xFF2A2F3F);
-                    Shapes.roundFill(ctx, x + 2, y0 + 18, Math.max(1, (int) Math.round(16 * frac)), 1, 1, 0xFF000000 | c);
-                }
-            }
-        }
-    }
-
-    // ---------------------------------------------------------------- nametags and held item
-
-    /** Lines from the bottom middle of the screen to each outlined entity. */
-    private static void drawEntityTracers(DrawContext ctx, MinecraftClient mc, List<Entity> entities) {
-        Projector p = new Projector(mc);
-        double[] cam = new double[3];
-        double[] sc = new double[2];
-        for (Entity e : entities) {
-            if (e == mc.player || !e.isAlive()) {
-                continue;
-            }
-            p.toCamera(e.getX(), e.getY() + e.getHeight() / 2.0, e.getZ(), cam);
-            if (cam[2] <= Projector.NEAR) {
-                continue;
-            }
-            p.toScreen(cam, sc);
-            EspRenderer.line(ctx, p.width / 2.0, p.height, sc[0], sc[1], 0xFF5FD4F0, 2);
-        }
-    }
-
-    private static void drawNametags(DrawContext ctx, MinecraftClient mc, Nametags nt) {
-        Projector p = new Projector(mc);
-        double[] cam = new double[3];
-        double[] sc = new double[2];
-        for (Entity e : mc.world.getEntities()) {
-            if (e == mc.player || !(e instanceof LivingEntity) || !e.isAlive()) {
-                continue;
-            }
-            boolean isPlayer = e instanceof PlayerEntity;
-            if (isPlayer ? !nt.players() : !nt.mobs()) {
-                continue;
-            }
-            if (mc.player.distanceTo(e) > nt.range()) {
-                continue;
-            }
-            p.toCamera(e.getX(), e.getY() + e.getHeight() + 0.35, e.getZ(), cam);
-            if (cam[2] <= Projector.NEAR) {
-                continue;
-            }
-            p.toScreen(cam, sc);
-            String name = e.getName().getString();
-            int tw = Fonts.width(name);
-            int sx = (int) Math.round(sc[0]);
-            int sy = (int) Math.round(sc[1]);
-            if (sx + tw / 2 < 0 || sx - tw / 2 > p.width || sy < -12 || sy > p.height) {
+           …1644 tokens truncated… < -12 || sy > p.height) {
                 continue;
             }
             Shapes.roundFill(ctx, sx - tw / 2 - 4, sy - 4, tw + 8, 12, 5, 0xB0100A14);
