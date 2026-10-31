@@ -2,6 +2,7 @@ name: Build 67 Client
 
 on:
   push:
+  pull_request:
   workflow_dispatch:
 
 jobs:
